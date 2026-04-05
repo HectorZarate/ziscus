@@ -40,21 +40,8 @@ export async function serveWithFreshComments(
       request.url,
     ).toString();
 
-    // Try ASSETS first, fall back to global fetch (handles edge cases
-    // where ASSETS binding doesn't resolve the request internally)
-    const fetchPage = async (): Promise<Response> => {
-      try {
-        const res = await env.ASSETS.fetch(new Request(pageUrl));
-        if (res.ok) return res;
-      } catch { /* fall through */ }
-      return fetch(pageUrl, {
-        headers: { Accept: "text/html" },
-        signal: AbortSignal.timeout(3000),
-      });
-    };
-
     const [pageRes, commentsResult] = await Promise.all([
-      fetchPage(),
+      env.ASSETS.fetch(new Request(pageUrl)),
       env.DB.prepare(
         "SELECT author, body, created_at FROM comments WHERE slug = ? AND status = 'approved' ORDER BY created_at DESC LIMIT ?",
       )
@@ -95,8 +82,12 @@ export async function serveWithFreshComments(
       headers: htmlHeaders(),
     });
   } catch (err) {
-    console.error("[ziscus] HTMLRewriter failed:", err instanceof Error ? `${err.message}\n${err.stack}` : err);
-    return redirect(redirectUrl);
+    const msg = err instanceof Error ? `${err.message} | ${err.stack}` : String(err);
+    // Return error as visible HTML so we can debug in prod
+    return new Response(`<pre>HTMLRewriter error: ${msg}\npageUrl: ${new URL(redirectUrl.startsWith("/") ? redirectUrl : new URL(redirectUrl).pathname || "/", request.url).toString()}</pre>`, {
+      status: 500,
+      headers: { "Content-Type": "text/html" },
+    });
   }
 }
 
