@@ -1,6 +1,7 @@
 import type { Env } from "./types.js";
 import { checkRateLimit } from "./rate-limit.js";
 import { triggerRebuild } from "./debounce.js";
+import { serveWithFreshComments } from "./html-rewriter.js";
 
 const MAX_AUTHOR_LENGTH = 100;
 const MAX_BODY_LENGTH = 10000;
@@ -112,8 +113,16 @@ export async function handleSubmit(
     await triggerRebuild(env.DB, env, slug);
   }
 
-  // Redirect back to the referring page (or provided redirect URL)
   const destination = redirectUrl || request.headers.get("Referer") || "/";
+
+  // Auto-approved: serve the page with fresh comments injected via HTMLRewriter.
+  // The commenter sees their comment instantly. Everyone else gets the cached
+  // static version until the next rebuild.
+  if (status === "approved" && env.ASSETS) {
+    return serveWithFreshComments(slug, destination, env);
+  }
+
+  // Pending/moderated: redirect back (comment not visible yet)
   return new Response(null, {
     status: 303,
     headers: { Location: destination },
