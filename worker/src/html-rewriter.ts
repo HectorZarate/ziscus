@@ -12,19 +12,19 @@ function renderComment(author: string, body: string, createdAt: string): string 
     day: "numeric",
   });
 
-  return `<article class="ziscus-comment">
-        <header class="ziscus-comment-header">
-          <strong class="ziscus-comment-author">${author}</strong>
+  return `<article class="comment">
+        <header class="comment-header">
+          <strong class="comment-author">${author}</strong>
           <time datetime="${createdAt}">${formatted}</time>
         </header>
-        <p class="ziscus-comment-body">${body}</p>
+        <p class="comment-body">${body}</p>
       </article>`;
 }
 
 /**
  * Serve the page with fresh comments injected via HTMLRewriter.
  * Fetches the static page from ASSETS, queries D1 for approved comments,
- * and rewrites the #ziscus section with up-to-date content.
+ * and rewrites the #comments section with up-to-date content.
  *
  * Falls back to a 303 redirect on any failure — the comment is already in D1.
  */
@@ -35,13 +35,26 @@ export async function serveWithFreshComments(
   env: Env,
 ): Promise<Response> {
   try {
-    // Use the original request's URL origin for ASSETS fetch
-    const url = new URL(request.url);
-    const assetUrl = new URL(redirectUrl.startsWith("/") ? redirectUrl : new URL(redirectUrl).pathname, url.origin);
+    const pageUrl = new URL(
+      redirectUrl.startsWith("/") ? redirectUrl : new URL(redirectUrl).pathname || "/",
+      request.url,
+    ).toString();
 
-    // Fetch page and comments in parallel
+    // Try ASSETS first, fall back to global fetch (handles edge cases
+    // where ASSETS binding doesn't resolve the request internally)
+    const fetchPage = async (): Promise<Response> => {
+      try {
+        const res = await env.ASSETS.fetch(new Request(pageUrl));
+        if (res.ok) return res;
+      } catch { /* fall through */ }
+      return fetch(pageUrl, {
+        headers: { Accept: "text/html" },
+        signal: AbortSignal.timeout(3000),
+      });
+    };
+
     const [pageRes, commentsResult] = await Promise.all([
-      env.ASSETS.fetch(assetUrl.toString()),
+      fetchPage(),
       env.DB.prepare(
         "SELECT author, body, created_at FROM comments WHERE slug = ? AND status = 'approved' ORDER BY created_at DESC LIMIT ?",
       )
@@ -53,7 +66,6 @@ export async function serveWithFreshComments(
       return redirect(redirectUrl);
     }
 
-    // Reverse to chronological order (queried DESC for efficiency with LIMIT)
     const comments = (commentsResult.results ?? []).reverse();
 
     if (comments.length === 0) {
@@ -63,16 +75,13 @@ export async function serveWithFreshComments(
       });
     }
 
-    // Build the comments HTML
     const total = comments.length;
-    const heading = `<h3>${total} ${total === 1 ? "Comment" : "Comments"}</h3>`;
+    const heading = `<h2>${total} ${total === 1 ? "Comment" : "Comments"}</h2>`;
     const commentHtml = comments
       .map((c) => renderComment(c.author, c.body, c.created_at))
       .join("\n      ");
     const freshSection = `${heading}\n      ${commentHtml}`;
 
-    // Stream through HTMLRewriter — replaces comment section content
-    // Supports both #comments (rss lobster) and #ziscus (standalone embed)
     const rewritten = new HTMLRewriter()
       .on("#comments, #ziscus", {
         element(el) {
@@ -86,7 +95,7 @@ export async function serveWithFreshComments(
       headers: htmlHeaders(),
     });
   } catch (err) {
-    console.error("[ziscus] HTMLRewriter failed:", err instanceof Error ? err.message : err);
+    console.error("[ziscus] HTMLRewriter failed:", err instanceof Error ? `${err.message}\n${err.stack}` : err);
     return redirect(redirectUrl);
   }
 }
