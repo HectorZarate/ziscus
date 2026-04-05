@@ -50,37 +50,3 @@ curl -H "Authorization: Bearer $SECRET" your-worker.workers.dev/admin/comments?s
 curl -X POST -H "Authorization: Bearer $SECRET" your-worker.workers.dev/approve/ID
 </code></pre>
 
-<hr>
-
-<h2>Try it</h2>
-
-<p>This posts to a real ziscus worker.</p>
-
-<style>
-.ziscus-section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
-.ziscus-section h3 { font-size: 1rem; margin-bottom: 0.75rem; }
-.ziscus-form label { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: var(--color-muted); }
-.ziscus-form input[type="text"], .ziscus-form textarea { width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); font: inherit; box-sizing: border-box; }
-.ziscus-form textarea { resize: vertical; }
-.ziscus-form button { padding: 0.5rem 1.25rem; border: 1px solid var(--color-border); background: var(--color-text); color: var(--color-bg); font: inherit; cursor: pointer; min-height: 44px; }
-.ziscus-form button:hover { opacity: 0.85; }
-</style>
-
-<section id="ziscus" class="ziscus-section">
-  <h3>Comments</h3>
-  <p>No comments yet.</p>
-</section>
-
-<form method="POST" action="https://ziscus.com/submit" class="ziscus-form">
-  <input type="hidden" name="slug" value="landing">
-  <input type="hidden" name="redirect" value="https://ziscus.com/">
-  <div>
-    <label for="ziscus-author">Name</label>
-    <input type="text" name="author" id="ziscus-author" required>
-  </div>
-  <div>
-    <label for="ziscus-body">Comment</label>
-    <textarea name="body" id="ziscus-body" rows="4" required></textarea>
-  </div>
-  <button type="submit">Post Comment</button>
-</form>

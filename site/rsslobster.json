@@ -9,14 +9,13 @@
   },
   "repo": "https://github.com/HectorZarate/ziscus",
   "permalink": "/posts/:slug/index.html",
-  "homepage": "home",
+  "homepage": "landing",
   "commentsEndpoint": "https://ziscus.hdz.workers.dev",
   "pages": [
     {
       "title": "ziscus",
-      "slug": "home",
+      "slug": "landing",
       "bodyFile": "content/landing.html",
-      "navOrder": 1,
       "layout": "default"
     }
   ]
