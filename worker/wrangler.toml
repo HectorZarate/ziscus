@@ -16,7 +16,7 @@ database_id = "aa367a7e-fa94-4e0a-bcd6-11af1071545c"
 [vars]
 ALLOWED_ORIGINS = "ziscus.com,ziscus.hdz.workers.dev"
 MODERATION = "off"
-RATE_LIMIT = "5"
+RATE_LIMIT = "30"
 GITHUB_REPO = "HectorZarate/ziscus"
 
 # Secrets — set via `wrangler secret put`, never commit values:

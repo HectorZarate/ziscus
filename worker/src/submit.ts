@@ -83,7 +83,7 @@ export async function handleSubmit(
   // Rate limiting
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
   const ipHash = await hashIp(ip);
-  const maxPerHour = env.RATE_LIMIT ? parseInt(env.RATE_LIMIT, 10) : 5;
+  const maxPerHour = env.RATE_LIMIT ? parseInt(env.RATE_LIMIT, 10) : 30;
   const { allowed } = await checkRateLimit(env.DB, ipHash, maxPerHour);
   if (!allowed) {
     return new Response("Rate limited. Try again later.", { status: 429 });

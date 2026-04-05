@@ -81,13 +81,8 @@ export async function serveWithFreshComments(
       status: 200,
       headers: htmlHeaders(),
     });
-  } catch (err) {
-    const msg = err instanceof Error ? `${err.message} | ${err.stack}` : String(err);
-    // Return error as visible HTML so we can debug in prod
-    return new Response(`<pre>HTMLRewriter error: ${msg}\npageUrl: ${new URL(redirectUrl.startsWith("/") ? redirectUrl : new URL(redirectUrl).pathname || "/", request.url).toString()}</pre>`, {
-      status: 500,
-      headers: { "Content-Type": "text/html" },
-    });
+  } catch {
+    return redirect(redirectUrl);
   }
 }
 
