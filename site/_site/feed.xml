@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>ziscus</title>
+    <link>https://ziscus.com</link>
+    <description>Zero-JavaScript anonymous comment system</description>
+    <language>en</language>
+    <atom:link href="https://ziscus.com/feed.xml" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://pubsubhubbub.appspot.com" rel="hub"/>
+    <lastBuildDate>Sun, 05 Apr 2026 17:40:35 GMT</lastBuildDate>
+    <image>
+      <url>https://ziscus.com/icon.png</url>
+      <title>ziscus</title>
+      <link>https://ziscus.com</link>
+      <width>144</width>
+      <height>144</height>
+    </image>
+
+  </channel>
+</rss>

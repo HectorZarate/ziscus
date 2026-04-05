@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /_previews/
+
+Sitemap: https://ziscus.com/sitemap.xml

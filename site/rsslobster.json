@@ -1,0 +1,23 @@
+{
+  "domain": "ziscus.com",
+  "title": "ziscus",
+  "description": "Zero-JavaScript anonymous comment system",
+  "author": "Hector Zarate",
+  "language": "en",
+  "style": {
+    "preset": "terminal"
+  },
+  "repo": "https://github.com/HectorZarate/ziscus",
+  "permalink": "/posts/:slug/index.html",
+  "homepage": "home",
+  "commentsEndpoint": "https://ziscus.hdz.workers.dev",
+  "pages": [
+    {
+      "title": "ziscus",
+      "slug": "home",
+      "bodyFile": "content/landing.html",
+      "navOrder": 1,
+      "layout": "default"
+    }
+  ]
+}
