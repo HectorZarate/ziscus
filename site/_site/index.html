@@ -16,8 +16,13 @@ your SSG bakes them into HTML at build ti">
 
 
 A Cloudflare Worker stores comments in D1,
-your SSG bakes them into HTML at build time. Moderation via curl.
-Source on GitHu">
+your SSG bakes them into HTML at build time.
+Source on GitHub.
+
+
+
+
+Inspired by gi">
   <meta property="og:url" content="https://ziscus.com/">
   <meta property="og:site_name" content="ziscus">
   <meta property="og:image" content="https://ziscus.com/og-image.png">
@@ -468,7 +473,7 @@ nav a, button, .tag {
 
 <p>
 A Cloudflare Worker stores comments in <a href="https://developers.cloudflare.com/d1/">D1</a>,
-your SSG bakes them into HTML at build time. Moderation via curl.
+your SSG bakes them into HTML at build time.
 <a href="https://github.com/HectorZarate/ziscus">Source on GitHub</a>.
 </p>
 
@@ -480,7 +485,7 @@ your SSG bakes them into HTML at build time. Moderation via curl.
 <li><strong>No client JavaScript</strong> &mdash; pure HTML forms, no iframe</li>
 <li><strong>Anonymous</strong> &mdash; no GitHub account required to comment</li>
 <li><strong>Cloudflare D1</strong> &mdash; SQLite at the edge, not GitHub Discussions</li>
-<li><strong>Full moderation</strong> &mdash; approve / reject / spam / ban via API</li>
+<li><strong>Optional moderation</strong> &mdash; auto-approve, or review first with approve / reject / spam / ban</li>
 <li><strong>Free</strong> &mdash; runs on Cloudflare's free tier</li>
 </ul>
 
@@ -488,13 +493,12 @@ your SSG bakes them into HTML at build time. Moderation via curl.
 
 <h2>How it works</h2>
 
-<pre><code>  HTML form ──POST /submit──> Worker ──> D1
-                                │
-                          validate, escape,
-                          rate-limit, store
-                                │
-                          pending ──> admin approves ──> rebuild
-</code></pre>
+<ol>
+<li>Add an HTML form to your page that POSTs to your ziscus Worker</li>
+<li>The Worker validates, escapes, rate-limits, and stores the comment in D1</li>
+<li>The commenter sees their comment instantly via HTMLRewriter</li>
+<li>Your static site rebuilds to bake approved comments into HTML</li>
+</ol>
 
 <hr>
 
@@ -511,16 +515,21 @@ wrangler deploy
 # Add a &lt;form&gt; that POSTs to your-worker.workers.dev/submit
 # See README for full HTML snippet
 
-# 3. Moderate
+# 3. Moderate (optional)
 curl -H "Authorization: Bearer $SECRET" your-worker.workers.dev/admin/comments?status=pending
 curl -X POST -H "Authorization: Bearer $SECRET" your-worker.workers.dev/approve/ID
 </code></pre>
 
 </div>
       <section id="comments" class="comments-section">
-      <h2>Comments</h2>
-      <p>No comments yet — be the first to comment.</p>
-      
+      <h2>1 Comment</h2>
+      <article class="comment">
+        <header class="comment-header">
+          <strong class="comment-author">hdz</strong>
+          <time datetime="2026-04-05T18:59:52Z">April 5, 2026</time>
+        </header>
+        <p class="comment-body">hello world</p>
+      </article>
     </section>
     <form method="POST" action="https://ziscus.hdz.workers.dev/submit" class="comment-form">
       <input type="hidden" name="slug" value="landing">
