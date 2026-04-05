@@ -122,7 +122,6 @@ export async function handleSubmit(
     return serveWithFreshComments(slug, destination, request, env);
   }
 
-  // Pending/moderated: redirect back (comment not visible yet)
   return new Response(null, {
     status: 303,
     headers: { Location: destination },
