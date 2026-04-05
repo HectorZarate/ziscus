@@ -3,9 +3,6 @@ import type { Env } from "./types.js";
 /** Max comments to query for the HTMLRewriter response. */
 const REWRITER_COMMENT_LIMIT = 200;
 
-/** Timeout for fetching the static page from assets (ms). */
-const ASSET_FETCH_TIMEOUT_MS = 3000;
-
 /** Render a single comment as HTML */
 function renderComment(author: string, body: string, createdAt: string): string {
   const date = new Date(createdAt);
@@ -34,15 +31,17 @@ function renderComment(author: string, body: string, createdAt: string): string 
 export async function serveWithFreshComments(
   slug: string,
   redirectUrl: string,
+  request: Request,
   env: Env,
 ): Promise<Response> {
   try {
+    // Use the original request's URL origin for ASSETS fetch
+    const url = new URL(request.url);
+    const assetUrl = new URL(redirectUrl.startsWith("/") ? redirectUrl : new URL(redirectUrl).pathname, url.origin);
+
     // Fetch page and comments in parallel
     const [pageRes, commentsResult] = await Promise.all([
-      env.ASSETS.fetch(new Request(redirectUrl, {
-        headers: { Accept: "text/html" },
-        signal: AbortSignal.timeout(ASSET_FETCH_TIMEOUT_MS),
-      })),
+      env.ASSETS.fetch(assetUrl.toString()),
       env.DB.prepare(
         "SELECT author, body, created_at FROM comments WHERE slug = ? AND status = 'approved' ORDER BY created_at DESC LIMIT ?",
       )
@@ -86,7 +85,6 @@ export async function serveWithFreshComments(
       headers: htmlHeaders(),
     });
   } catch {
-    // Any failure → fall back to redirect. Comment is already in D1.
     return redirect(redirectUrl);
   }
 }

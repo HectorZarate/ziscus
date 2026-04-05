@@ -119,7 +119,7 @@ export async function handleSubmit(
   // The commenter sees their comment instantly. Everyone else gets the cached
   // static version until the next rebuild.
   if (status === "approved" && env.ASSETS) {
-    return serveWithFreshComments(slug, destination, env);
+    return serveWithFreshComments(slug, destination, request, env);
   }
 
   // Pending/moderated: redirect back (comment not visible yet)
