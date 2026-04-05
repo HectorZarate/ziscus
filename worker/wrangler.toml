@@ -5,15 +5,13 @@ compatibility_date = "2025-09-27"
 [[d1_databases]]
 binding = "DB"
 database_name = "ziscus-comments"
-database_id = "YOUR_DATABASE_ID"
+database_id = "aa367a7e-fa94-4e0a-bcd6-11af1071545c"
 
 [vars]
-ALLOWED_ORIGINS = "your-site.com"
+ALLOWED_ORIGINS = "ziscus.com"
 MODERATION = "on"
 RATE_LIMIT = "5"
-
-# Optional — for triggering static site rebuilds on new comments:
-# GITHUB_REPO = "owner/repo"
+GITHUB_REPO = "HectorZarate/ziscus"
 
 # Secrets — set via `wrangler secret put`, never commit values:
 # ADMIN_SECRET — for approving/rejecting comments
