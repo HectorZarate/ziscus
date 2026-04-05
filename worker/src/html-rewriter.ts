@@ -85,7 +85,8 @@ export async function serveWithFreshComments(
       status: 200,
       headers: htmlHeaders(),
     });
-  } catch {
+  } catch (err) {
+    console.error("[ziscus] HTMLRewriter failed:", err instanceof Error ? err.message : err);
     return redirect(redirectUrl);
   }
 }
