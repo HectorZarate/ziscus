@@ -4,19 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ziscus</title>
-  <meta name="description" content="Zero-JavaScript anonymous comments for static sites.
+  <meta name="description" content="Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
 
-ziscus is an embeddable comment system that requires no client-side JavaScript and no user accounts.
-Visi">
+A Cloudflare Worker stores comments in D1,
+your SSG bakes them into HTML at build ti">
   <meta name="author" content="Hector Zarate">
   <meta property="og:type" content="website">
   <meta property="og:title" content="ziscus — Zero-JavaScript anonymous comment system">
-  <meta property="og:description" content="Zero-JavaScript anonymous comments for static sites.
+  <meta property="og:description" content="Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
 
-ziscus is an embeddable comment system that requires no client-side JavaScript and no user accounts.
-Visitors leave comments through plain HTML f">
+A Cloudflare Worker stores comments in D1,
+your SSG bakes them into HTML at build time. Moderation via curl.
+Source on GitHu">
   <meta property="og:url" content="https://ziscus.com/">
   <meta property="og:site_name" content="ziscus">
   <meta property="og:image" content="https://ziscus.com/og-image.png">
@@ -450,34 +451,28 @@ nav a, button, .tag {
   <main id="main">
     <article>
       <h1>ziscus</h1>
-      <div><p><strong>Zero-JavaScript anonymous comments for static sites.</strong></p>
+      <div><p>Comments for static sites. No JavaScript. No accounts. Just an HTML form.</p>
 
 <p>
-ziscus is an embeddable comment system that requires no client-side JavaScript and no user accounts.
-Visitors leave comments through plain HTML forms. Comments are stored in
-<a href="https://developers.cloudflare.com/d1/">Cloudflare D1</a> (SQLite at the edge)
-and baked into your static pages at build time. Moderation and anti-spam are built in.
-</p>
-
-<p>
-<a href="https://github.com/HectorZarate/ziscus">Source on GitHub</a>
+A Cloudflare Worker stores comments in <a href="https://developers.cloudflare.com/d1/">D1</a>,
+your SSG bakes them into HTML at build time. Moderation via curl.
+<a href="https://github.com/HectorZarate/ziscus">Source on GitHub</a>.
 </p>
 
 <hr>
 
-<h2>ziscus vs giscus</h2>
+<h2>vs giscus</h2>
 
 <table>
 <thead>
 <tr><th></th><th>giscus</th><th>ziscus</th></tr>
 </thead>
 <tbody>
-<tr><td><strong>Client JS</strong></td><td>Required (iframe + script)</td><td>None. Pure HTML forms</td></tr>
-<tr><td><strong>Auth</strong></td><td>GitHub account required</td><td>Anonymous</td></tr>
-<tr><td><strong>Storage</strong></td><td>GitHub Discussions</td><td>Cloudflare D1 (SQLite)</td></tr>
-<tr><td><strong>Moderation</strong></td><td>GitHub built-in</td><td>Approve / reject / spam / ban</td></tr>
-<tr><td><strong>Anti-spam</strong></td><td>GitHub rate limits</td><td>Rate limit + URL filter + IP ban</td></tr>
-<tr><td><strong>Self-hosted</strong></td><td>Optional</td><td>Required (your Cloudflare account)</td></tr>
+<tr><td><strong>Client JS</strong></td><td>Required</td><td>None</td></tr>
+<tr><td><strong>Auth</strong></td><td>GitHub account</td><td>Anonymous</td></tr>
+<tr><td><strong>Storage</strong></td><td>GitHub Discussions</td><td>Cloudflare D1</td></tr>
+<tr><td><strong>Moderation</strong></td><td>GitHub built-in</td><td>approve / reject / spam / ban</td></tr>
+<tr><td><strong>Self-hosted</strong></td><td>Optional</td><td>Required</td></tr>
 </tbody>
 </table>
 
@@ -485,103 +480,43 @@ and baked into your static pages at build time. Moderation and anti-spam are bui
 
 <h2>How it works</h2>
 
-<pre><code>  Visitor submits HTML form
-          |
-          v
-  POST /submit ──────────────> Cloudflare Worker
-                                     |
-                    ┌────────────────┼────────────────┐
-                    v                v                v
-               Rate limit        URL filter       Ban check
-               (5/hr per IP)     (max 3 URLs)     (IP hash)
-                                     |
-                                     v
-                              Escape HTML input
-                                     |
-                                     v
-                              Store in D1 (SQLite)
-                              status: pending | approved
-                                     |
-                              ┌──────┴──────┐
-                              v             v
-                         Auto-approve   Queue for
-                         (if configured) moderation
-                                     |
-                                     v
-                              Trigger site rebuild
-                              (GitHub Actions, debounced)
+<pre><code>  HTML form ──POST /submit──> Worker ──> D1
+                                │
+                          validate, escape,
+                          rate-limit, store
+                                │
+                          pending ──> admin approves ──> rebuild
 </code></pre>
-
-<hr>
-
-<h2>Anti-spam</h2>
-
-<p>Built in, zero configuration required:</p>
-
-<ul>
-<li><strong>Rate limiting</strong> &mdash; 5 comments per IP per hour (configurable)</li>
-<li><strong>URL filtering</strong> &mdash; rejects comments with more than 3 URLs</li>
-<li><strong>IP banning</strong> &mdash; manual ban list with reasons</li>
-<li><strong>CSRF protection</strong> &mdash; Origin/Referer validation</li>
-<li><strong>HTML escaping</strong> &mdash; all input escaped server-side to prevent stored XSS</li>
-</ul>
 
 <hr>
 
 <h2>Quick start</h2>
 
-<h3>1. Deploy the Worker</h3>
-
-<pre><code>cd worker
-pnpm install
+<pre><code># 1. Deploy
+cd worker && pnpm install
 wrangler d1 create ziscus-comments
-# update wrangler.toml with your database_id
-wrangler d1 execute ziscus-comments --file=src/schema.sql
-wrangler secret put ADMIN_SECRET
+wrangler d1 execute ziscus-comments --remote --file=src/schema.sql
+openssl rand -hex 32 | wrangler secret put ADMIN_SECRET
 wrangler deploy
-</code></pre>
 
-<h3>2. Add the form to your site</h3>
+# 2. Embed
+# Add a &lt;form&gt; that POSTs to your-worker.workers.dev/submit
+# See README for full HTML snippet
 
-<pre><code>&lt;form method="POST" action="https://your-worker.workers.dev/submit"&gt;
-  &lt;input type="hidden" name="slug" value="my-page"&gt;
-&lt;input type="text" name="author" required&gt;
-  &lt;textarea name="body" rows="4" required&gt;&lt;/textarea&gt;
-  &lt;button type="submit"&gt;Post Comment&lt;/button&gt;
-&lt;/form&gt;
-</code></pre>
-
-<h3>3. Moderate via API</h3>
-
-<pre><code># List pending
-curl -H "Authorization: Bearer $SECRET" \
-  https://your-worker.workers.dev/admin/comments?status=pending
-
-# Approve
-curl -X POST -H "Authorization: Bearer $SECRET" \
-  https://your-worker.workers.dev/approve/COMMENT_ID
-
-# Ban an IP
-curl -X POST -H "Authorization: Bearer $SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"ip_hash":"...","reason":"spam"}' \
-  https://your-worker.workers.dev/admin/ban
+# 3. Moderate
+curl -H "Authorization: Bearer $SECRET" your-worker.workers.dev/admin/comments?status=pending
+curl -X POST -H "Authorization: Bearer $SECRET" your-worker.workers.dev/approve/ID
 </code></pre>
 
 <hr>
 
 <h2>Try it</h2>
 
-<p>This form is a live demo &mdash; it posts to a real ziscus worker. Leave a comment.</p>
+<p>This posts to a real ziscus worker.</p>
 
 <style>
 .ziscus-section { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--color-border); }
 .ziscus-section h3 { font-size: 1rem; margin-bottom: 0.75rem; }
-.ziscus-comment { margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--color-border); }
-.ziscus-comment-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem; }
-.ziscus-comment-author { color: var(--color-text); }
-.ziscus-comment-header time { font-size: 0.85rem; color: var(--color-muted); }
-.ziscus-comment-body { margin: 0; color: var(--color-text); }
 .ziscus-form label { display: block; margin-bottom: 0.25rem; font-size: 0.9rem; color: var(--color-muted); }
 .ziscus-form input[type="text"], .ziscus-form textarea { width: 100%; padding: 0.5rem; margin-bottom: 0.75rem; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); font: inherit; box-sizing: border-box; }
 .ziscus-form textarea { resize: vertical; }
@@ -591,7 +526,7 @@ curl -X POST -H "Authorization: Bearer $SECRET" \
 
 <section id="ziscus" class="ziscus-section">
   <h3>Comments</h3>
-  <p>No comments yet &mdash; be the first.</p>
+  <p>No comments yet.</p>
 </section>
 
 <form method="POST" action="https://ziscus.com/submit" class="ziscus-form">
