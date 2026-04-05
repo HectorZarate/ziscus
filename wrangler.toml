@@ -1,4 +1,0 @@
-# Cloudflare Pages — serves the pre-built static site
-# This is separate from worker/wrangler.toml which deploys the comments API
-name = "ziscus"
-pages_build_output_dir = "site/_site"
