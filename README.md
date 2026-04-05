@@ -52,7 +52,9 @@ wrangler d1 create ziscus-comments
 # Then apply the schema:
 wrangler d1 execute ziscus-comments --file=src/schema.sql
 
-# Set your admin secret
+# Generate a secure admin secret
+openssl rand -hex 32
+# Then set it on your worker
 wrangler secret put ADMIN_SECRET
 
 # Deploy
