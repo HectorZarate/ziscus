@@ -1,5 +1,7 @@
 export interface Env {
   DB: D1Database;
+  /** Static asset handler — serves the landing site for non-API routes */
+  ASSETS: Fetcher;
   /** Comma-separated list of allowed origin hostnames for CSRF protection */
   ALLOWED_ORIGINS: string;
   /** GitHub repo (owner/repo) to trigger rebuilds via repository_dispatch */

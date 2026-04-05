@@ -91,6 +91,8 @@ export default {
       if (unbanMatch && request.method === "DELETE") return handleUnbanIp(unbanMatch[1]!, request, env);
     }
 
+    // No API route matched — serve static assets (landing site)
+    if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response("Not found", { status: 404 });
   },
 };

@@ -2,6 +2,12 @@ name = "ziscus"
 main = "src/index.ts"
 compatibility_date = "2025-09-27"
 
+# Static assets — serves the landing site at ziscus.com
+# API routes (/submit, /comments/*, /admin/*) are handled by the Worker
+# Everything else falls through to static files from site/_site/
+[assets]
+directory = "../site/_site"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "ziscus-comments"
