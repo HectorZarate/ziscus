@@ -10,7 +10,7 @@ Inspired by [giscus](https://github.com/giscus/giscus), but with a fundamentally
 | **Auth** | GitHub account required | Anonymous — no login needed |
 | **Storage** | GitHub Discussions | Cloudflare D1 (SQLite at the edge) |
 | **Moderation** | GitHub's built-in | Full moderation suite (approve/reject/spam/ban) |
-| **Anti-spam** | GitHub's rate limits | Honeypot, rate limiting, URL filtering, IP banning |
+| **Anti-spam** | GitHub's rate limits | Rate limiting, URL filtering, IP banning |
 | **Self-hosted** | Optional | Required (your Cloudflare account) |
 
 ## Architecture
@@ -75,8 +75,6 @@ Add this wherever you want comments:
 
 <form method="POST" action="https://your-worker.workers.dev/submit" class="ziscus-form">
   <input type="hidden" name="slug" value="your-page-slug">
-  <!-- Honeypot field — hidden from real users, catches bots -->
-  <div style="display:none"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
   <div>
     <label for="ziscus-author">Name</label>
     <input type="text" name="author" id="ziscus-author" required>
@@ -114,7 +112,6 @@ const page = `
 
 Built-in, zero-configuration:
 
-- **Honeypot field** — hidden `website` input that bots fill out; silently rejected with fake success
 - **Rate limiting** — 5 comments per IP per hour (configurable via `RATE_LIMIT` env var)
 - **URL filtering** — rejects comments with more than 3 URLs
 - **IP banning** — manual ban list with reasons

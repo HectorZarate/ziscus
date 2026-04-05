@@ -476,7 +476,7 @@ and baked into your static pages at build time. Moderation and anti-spam are bui
 <tr><td><strong>Auth</strong></td><td>GitHub account required</td><td>Anonymous</td></tr>
 <tr><td><strong>Storage</strong></td><td>GitHub Discussions</td><td>Cloudflare D1 (SQLite)</td></tr>
 <tr><td><strong>Moderation</strong></td><td>GitHub built-in</td><td>Approve / reject / spam / ban</td></tr>
-<tr><td><strong>Anti-spam</strong></td><td>GitHub rate limits</td><td>Honeypot + rate limit + URL filter + IP ban</td></tr>
+<tr><td><strong>Anti-spam</strong></td><td>GitHub rate limits</td><td>Rate limit + URL filter + IP ban</td></tr>
 <tr><td><strong>Self-hosted</strong></td><td>Optional</td><td>Required (your Cloudflare account)</td></tr>
 </tbody>
 </table>
@@ -492,8 +492,8 @@ and baked into your static pages at build time. Moderation and anti-spam are bui
                                      |
                     ┌────────────────┼────────────────┐
                     v                v                v
-               Honeypot         Rate limit        Ban check
-               (silent reject)  (5/hr per IP)     (IP hash)
+               Rate limit        URL filter       Ban check
+               (5/hr per IP)     (max 3 URLs)     (IP hash)
                                      |
                                      v
                               Escape HTML input
@@ -519,7 +519,6 @@ and baked into your static pages at build time. Moderation and anti-spam are bui
 <p>Built in, zero configuration required:</p>
 
 <ul>
-<li><strong>Honeypot field</strong> &mdash; hidden input that bots fill out; silently rejected with fake success</li>
 <li><strong>Rate limiting</strong> &mdash; 5 comments per IP per hour (configurable)</li>
 <li><strong>URL filtering</strong> &mdash; rejects comments with more than 3 URLs</li>
 <li><strong>IP banning</strong> &mdash; manual ban list with reasons</li>
@@ -546,10 +545,7 @@ wrangler deploy
 
 <pre><code>&lt;form method="POST" action="https://your-worker.workers.dev/submit"&gt;
   &lt;input type="hidden" name="slug" value="my-page"&gt;
-  &lt;div style="display:none"&gt;
-    &lt;input type="text" name="website" tabindex="-1"&gt;
-  &lt;/div&gt;
-  &lt;input type="text" name="author" required&gt;
+&lt;input type="text" name="author" required&gt;
   &lt;textarea name="body" rows="4" required&gt;&lt;/textarea&gt;
   &lt;button type="submit"&gt;Post Comment&lt;/button&gt;
 &lt;/form&gt;
@@ -601,7 +597,6 @@ curl -X POST -H "Authorization: Bearer $SECRET" \
 <form method="POST" action="https://ziscus.com/submit" class="ziscus-form">
   <input type="hidden" name="slug" value="landing">
   <input type="hidden" name="redirect" value="https://ziscus.com/">
-  <div style="display:none"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>
   <div>
     <label for="ziscus-author">Name</label>
     <input type="text" name="author" id="ziscus-author" required>

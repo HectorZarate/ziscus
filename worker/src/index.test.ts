@@ -162,19 +162,6 @@ describe("POST /submit", () => {
     expect(res.status).toBe(400);
   });
 
-  it("silently rejects honeypot-filled requests with fake 303", async () => {
-    const res = await submitComment("test", "Bot", "Buy cheap watches!", {
-      website: "https://spam.com",
-    });
-    expect(res.status).toBe(303);
-
-    // But no comment was actually stored
-    const { results } = await env.DB.prepare(
-      "SELECT * FROM comments WHERE slug = 'test'",
-    ).all();
-    expect(results).toHaveLength(0);
-  });
-
   it("rejects comments with more than 3 URLs", async () => {
     const body =
       "Check out https://a.com and https://b.com and https://c.com and https://d.com";

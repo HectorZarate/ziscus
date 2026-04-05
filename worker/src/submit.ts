@@ -48,18 +48,7 @@ export async function handleSubmit(
   const slug = formData.get("slug")?.toString().trim() ?? "";
   const author = formData.get("author")?.toString().trim() ?? "";
   const body = formData.get("body")?.toString().trim() ?? "";
-  const honeypot = formData.get("website")?.toString() ?? "";
   const redirectUrl = formData.get("redirect")?.toString().trim() ?? "";
-
-  // Honeypot check — bots fill this hidden field
-  if (honeypot) {
-    // Silently reject with a fake success to not tip off the bot
-    const fallback = redirectUrl || request.headers.get("Referer") || "/";
-    return new Response(null, {
-      status: 303,
-      headers: { Location: fallback },
-    });
-  }
 
   // CSRF protection: reject if Origin doesn't match any allowed origin
   const origin = request.headers.get("Origin") ?? request.headers.get("Referer") ?? "";

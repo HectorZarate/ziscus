@@ -67,8 +67,7 @@ export function renderCommentForm(
     : "";
 
   return `<form method="POST" action="${escHtml(submitUrl)}" class="ziscus-form">
-      <input type="hidden" name="slug" value="${escHtml(slug)}">
-      <div style="display:none"><input type="text" name="website" tabindex="-1" autocomplete="off"></div>${redirectField}
+      <input type="hidden" name="slug" value="${escHtml(slug)}">${redirectField}
       <div>
         <label for="ziscus-author">Name</label>
         <input type="text" name="author" id="ziscus-author" required>
