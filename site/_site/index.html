@@ -461,20 +461,15 @@ your SSG bakes them into HTML at build time. Moderation via curl.
 
 <hr>
 
-<h2>vs giscus</h2>
+<p>Inspired by <a href="https://github.com/giscus/giscus">giscus</a>, but different:</p>
 
-<table>
-<thead>
-<tr><th></th><th>giscus</th><th>ziscus</th></tr>
-</thead>
-<tbody>
-<tr><td><strong>Client JS</strong></td><td>Required</td><td>None</td></tr>
-<tr><td><strong>Auth</strong></td><td>GitHub account</td><td>Anonymous</td></tr>
-<tr><td><strong>Storage</strong></td><td>GitHub Discussions</td><td>Cloudflare D1</td></tr>
-<tr><td><strong>Moderation</strong></td><td>GitHub built-in</td><td>approve / reject / spam / ban</td></tr>
-<tr><td><strong>Self-hosted</strong></td><td>Optional</td><td>Required</td></tr>
-</tbody>
-</table>
+<ul>
+<li><strong>No client JavaScript</strong> &mdash; pure HTML forms, no iframe</li>
+<li><strong>Anonymous</strong> &mdash; no GitHub account required to comment</li>
+<li><strong>Cloudflare D1</strong> &mdash; SQLite at the edge, not GitHub Discussions</li>
+<li><strong>Full moderation</strong> &mdash; approve / reject / spam / ban via API</li>
+<li><strong>Self-hosted</strong> &mdash; runs on your Cloudflare account</li>
+</ul>
 
 <hr>
 

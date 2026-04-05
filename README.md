@@ -4,15 +4,13 @@ Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
 A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1/), your SSG bakes them into HTML at build time. Moderation via curl.
 
-Inspired by [giscus](https://github.com/giscus/giscus):
+Inspired by [giscus](https://github.com/giscus/giscus), but different:
 
-| | giscus | ziscus |
-|---|---|---|
-| **Client JS** | Required | None |
-| **Auth** | GitHub account | Anonymous |
-| **Storage** | GitHub Discussions | Cloudflare D1 |
-| **Moderation** | GitHub built-in | approve / reject / spam / ban |
-| **Self-hosted** | Optional | Required |
+- **No client JavaScript** — pure HTML forms, no iframe
+- **Anonymous** — no GitHub account required to comment
+- **Cloudflare D1** — SQLite at the edge, not GitHub Discussions
+- **Full moderation** — approve / reject / spam / ban via API
+- **Self-hosted** — runs on your Cloudflare account
 
 Two packages:
 
