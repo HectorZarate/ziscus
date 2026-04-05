@@ -1,0 +1,20 @@
+name = "ziscus"
+main = "src/index.ts"
+compatibility_date = "2025-09-27"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ziscus-comments"
+database_id = "YOUR_DATABASE_ID"
+
+[vars]
+ALLOWED_ORIGINS = "your-site.com"
+MODERATION = "on"
+RATE_LIMIT = "5"
+
+# Optional — for triggering static site rebuilds on new comments:
+# GITHUB_REPO = "owner/repo"
+
+# Secrets — set via `wrangler secret put`, never commit values:
+# ADMIN_SECRET — for approving/rejecting comments
+# GITHUB_TOKEN — for repository_dispatch rebuild triggers
