@@ -10,7 +10,7 @@ Inspired by [giscus](https://github.com/giscus/giscus), but different:
 - **Anonymous** — no GitHub account required to comment
 - **Cloudflare D1** — SQLite at the edge, not GitHub Discussions
 - **Full moderation** — approve / reject / spam / ban via API
-- **Self-hosted** — runs on your Cloudflare account
+- **Free** — runs on Cloudflare's free tier
 
 Two packages:
 
