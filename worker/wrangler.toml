@@ -8,6 +8,8 @@ compatibility_date = "2025-09-27"
 [assets]
 directory = "../site/_site"
 binding = "ASSETS"
+# Let the Worker handle all requests — ASSETS only serves via env.ASSETS.fetch()
+serve_directly = false
 
 [[d1_databases]]
 binding = "DB"

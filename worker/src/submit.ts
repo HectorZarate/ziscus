@@ -118,8 +118,14 @@ export async function handleSubmit(
   // Auto-approved: serve the page with fresh comments injected via HTMLRewriter.
   // The commenter sees their comment instantly. Everyone else gets the cached
   // static version until the next rebuild.
-  if (status === "approved" && env.ASSETS) {
-    return serveWithFreshComments(slug, destination, request, env);
+  if (status === "approved") {
+    // Redirect to /_fresh/<slug> — the Worker serves the page with fresh comments
+    // This path doesn't match any static asset, so the Worker always handles it
+    const freshUrl = new URL(`/_fresh/${slug}`, request.url);
+    return new Response(null, {
+      status: 303,
+      headers: { Location: freshUrl.toString() },
+    });
   }
 
   return new Response(null, {

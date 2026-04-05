@@ -1,5 +1,6 @@
 import type { Env } from "./types.js";
 import { handleSubmit } from "./submit.js";
+import { serveWithFreshComments } from "./html-rewriter.js";
 import {
   handleGetComments,
   handleApprove,
@@ -89,6 +90,12 @@ export default {
 
       const unbanMatch = path.match(/^\/admin\/ban\/([a-z0-9]+)\/?$/);
       if (unbanMatch && request.method === "DELETE") return handleUnbanIp(unbanMatch[1]!, request, env);
+    }
+
+    // /_fresh/<slug> — serve page with fresh comments (post-submit redirect)
+    const freshMatch = path.match(/^\/_fresh\/([a-z0-9-]+)\/?$/);
+    if (freshMatch && env.ASSETS) {
+      return serveWithFreshComments(freshMatch[1]!, "/", request, env);
     }
 
     // No API route matched — serve static assets (landing site)

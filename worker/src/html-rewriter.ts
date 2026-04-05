@@ -69,12 +69,14 @@ export async function serveWithFreshComments(
       .join("\n      ");
     const freshSection = `${heading}\n      ${commentHtml}`;
 
+    const handler = {
+      element(el: Element) {
+        el.setInnerContent(freshSection, { html: true });
+      },
+    };
     const rewritten = new HTMLRewriter()
-      .on("#comments, #ziscus", {
-        element(el) {
-          el.setInnerContent(freshSection, { html: true });
-        },
-      })
+      .on("#comments", handler)
+      .on("#ziscus", handler)
       .transform(pageRes);
 
     return new Response(rewritten.body, {

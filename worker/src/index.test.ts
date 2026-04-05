@@ -72,11 +72,11 @@ describe("POST /submit", () => {
     await env.DB.prepare("DELETE FROM banned_ips").run();
   });
 
-  it("inserts a comment and returns 200 with instant feedback", async () => {
+  it("inserts a comment and redirects to /_fresh/<slug>", async () => {
     const res = await submitComment("test-post", "Ada", "Great article!");
-    // With MODERATION=off and ASSETS binding, returns 200 (HTMLRewriter)
-    // Falls back to 303 if ASSETS unavailable
-    expect(res.status === 200 || res.status === 303).toBe(true);
+    expect(res.status).toBe(303);
+    const location = res.headers.get("Location")!;
+    expect(location).toContain("/_fresh/test-post");
 
     const { results } = await env.DB.prepare(
       "SELECT * FROM comments WHERE slug = 'test-post'",
@@ -86,15 +86,11 @@ describe("POST /submit", () => {
     expect(results[0]!.body).toBe("Great article!");
   });
 
-  it("auto-approved comment is visible in response HTML", async () => {
-    const res = await submitComment("my-post", "Bob", "Nice work!");
-    if (res.status === 200) {
-      const html = await res.text();
-      expect(html).toContain("Bob");
-      expect(html).toContain("Nice work!");
-    } else {
-      expect(res.status).toBe(303);
-    }
+  it("redirect goes to /_fresh/<slug> for instant feedback", async () => {
+    const res = await submitComment("my-page", "Bob", "Nice work!");
+    expect(res.status).toBe(303);
+    const location = res.headers.get("Location")!;
+    expect(location).toContain("/_fresh/my-page");
   });
 
   it("returns 400 on missing author", async () => {
