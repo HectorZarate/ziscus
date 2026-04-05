@@ -71,9 +71,10 @@ export async function serveWithFreshComments(
       .join("\n      ");
     const freshSection = `${heading}\n      ${commentHtml}`;
 
-    // Stream through HTMLRewriter — replaces #ziscus section content
+    // Stream through HTMLRewriter — replaces comment section content
+    // Supports both #comments (rss lobster) and #ziscus (standalone embed)
     const rewritten = new HTMLRewriter()
-      .on("#ziscus", {
+      .on("#comments, #ziscus", {
         element(el) {
           el.setInnerContent(freshSection, { html: true });
         },
