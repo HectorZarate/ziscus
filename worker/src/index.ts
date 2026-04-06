@@ -1,6 +1,8 @@
 import type { Env } from "./types.js";
 import { handleSubmit } from "./submit.js";
 import { serveWithFreshComments } from "./html-rewriter.js";
+import { classifyComment } from "./classify.js";
+import { requireAuth } from "./auth.js";
 import {
   handleGetComments,
   handleApprove,
@@ -90,6 +92,17 @@ export default {
       if (path === "/admin/ban" && request.method === "POST") return handleBanIp(request, env);
       if (path === "/admin/bans" && request.method === "GET") return handleListBans(request, env);
       if (path === "/admin/bulk/approve" && request.method === "POST") return handleBulkApprove(request, env);
+
+      if (path === "/admin/classify" && request.method === "POST") {
+        const authErr = requireAuth(request, env);
+        if (authErr) return authErr;
+        const { author, body } = await request.json() as { author?: string; body?: string };
+        if (!author || !body) return new Response("Missing author or body", { status: 400 });
+        const classification = await classifyComment(author, body, env);
+        return new Response(JSON.stringify({ classification }), {
+          status: 200, headers: { "Content-Type": "application/json" },
+        });
+      }
 
       const unbanMatch = path.match(/^\/admin\/ban\/([a-z0-9]+)\/?$/);
       if (unbanMatch && request.method === "DELETE") return handleUnbanIp(unbanMatch[1]!, request, env);

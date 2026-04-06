@@ -2,6 +2,7 @@ import type { Env } from "./types.js";
 import { checkRateLimit } from "./rate-limit.js";
 import { triggerRebuild } from "./debounce.js";
 import { serveWithFreshComments } from "./html-rewriter.js";
+import { classifyComment } from "./classify.js";
 
 const MAX_AUTHOR_LENGTH = 100;
 const MAX_BODY_LENGTH = 10000;
@@ -96,12 +97,18 @@ export async function handleSubmit(
     return new Response("Forbidden", { status: 403 });
   }
 
+  // AI spam classification (skip if paused — pause means review everything)
+  const classification = mode === "paused" ? "approve" as const : await classifyComment(author, body, env);
+  const aiOverride = classification === "spam" ? "spam" as const
+    : classification === "review" ? "pending" as const
+    : null;
+
   // Escape and insert
   const safeAuthor = escHtml(author);
   const safeBody = escHtml(body);
 
-  // Mode-aware status: paused forces pending regardless of MODERATION setting
-  const status = mode === "paused" ? "pending" : (env.MODERATION === "on" ? "pending" : "approved");
+  const status = aiOverride
+    ?? (mode === "paused" ? "pending" : (env.MODERATION === "on" ? "pending" : "approved"));
 
   await env.DB.prepare(
     "INSERT INTO comments (slug, author, body, status, ip_hash) VALUES (?, ?, ?, ?, ?)",
@@ -118,7 +125,7 @@ export async function handleSubmit(
 
   // Auto-approved: return the page with fresh comments injected via HTMLRewriter.
   // The commenter sees their comment instantly — no redirect, stays on the same site.
-  if (status === "approved" && env.ASSETS) {
+  if ((status === "approved" || status === "spam") && env.ASSETS) {
     return serveWithFreshComments(slug, destination, request, env);
   }
 
