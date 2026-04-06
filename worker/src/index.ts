@@ -38,12 +38,11 @@ export default {
       });
     }
 
-    // /submit — comment submission (POST only)
+    // /submit — comment submission
     if (path === "/submit") {
-      if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 });
-      }
-      return handleSubmit(request, env);
+      if (request.method === "POST") return handleSubmit(request, env);
+      // GET /submit (e.g. browser refresh) → redirect to homepage
+      return new Response(null, { status: 302, headers: { Location: "/" } });
     }
 
     // GET /comments/:slug — approved comments as JSON
@@ -90,12 +89,6 @@ export default {
 
       const unbanMatch = path.match(/^\/admin\/ban\/([a-z0-9]+)\/?$/);
       if (unbanMatch && request.method === "DELETE") return handleUnbanIp(unbanMatch[1]!, request, env);
-    }
-
-    // /_fresh/<slug> — serve page with fresh comments (post-submit redirect)
-    const freshMatch = path.match(/^\/_fresh\/([a-z0-9-]+)\/?$/);
-    if (freshMatch && env.ASSETS) {
-      return serveWithFreshComments(freshMatch[1]!, "/", request, env);
     }
 
     // No API route matched — serve static assets (landing site)

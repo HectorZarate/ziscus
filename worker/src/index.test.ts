@@ -72,11 +72,10 @@ describe("POST /submit", () => {
     await env.DB.prepare("DELETE FROM banned_ips").run();
   });
 
-  it("inserts a comment and redirects to /_fresh/<slug>", async () => {
+  it("inserts a comment and returns 200 with instant feedback", async () => {
     const res = await submitComment("test-post", "Ada", "Great article!");
-    expect(res.status).toBe(303);
-    const location = res.headers.get("Location")!;
-    expect(location).toContain("/_fresh/test-post");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
 
     const { results } = await env.DB.prepare(
       "SELECT * FROM comments WHERE slug = 'test-post'",
@@ -84,13 +83,6 @@ describe("POST /submit", () => {
     expect(results).toHaveLength(1);
     expect(results[0]!.author).toBe("Ada");
     expect(results[0]!.body).toBe("Great article!");
-  });
-
-  it("redirect goes to /_fresh/<slug> for instant feedback", async () => {
-    const res = await submitComment("my-page", "Bob", "Nice work!");
-    expect(res.status).toBe(303);
-    const location = res.headers.get("Location")!;
-    expect(location).toContain("/_fresh/my-page");
   });
 
   it("returns 400 on missing author", async () => {
@@ -399,9 +391,10 @@ describe("routing", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 405 for GET /submit", async () => {
-    const res = await SELF.fetch("https://test.example.com/submit");
-    expect(res.status).toBe(405);
+  it("GET /submit redirects to homepage", async () => {
+    const res = await SELF.fetch("https://test.example.com/submit", { redirect: "manual" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("/");
   });
 
   it("handles CORS preflight", async () => {
