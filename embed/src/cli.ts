@@ -9,7 +9,7 @@ import { runFetch, extractSlugsFromSitemap } from "./cli/fetch.js";
 const program = new Command()
   .name("ziscus")
   .description("Zero-JavaScript anonymous comment system")
-  .version("0.1.0");
+  .version("0.1.0"); // Keep in sync with package.json version
 
 program
   .command("init")

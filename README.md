@@ -1,8 +1,12 @@
 # ziscus
 
+[![npm](https://img.shields.io/npm/v/ziscus)](https://www.npmjs.com/package/ziscus)
+
 Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
 A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1/), your SSG bakes them into HTML at build time. Moderation via curl.
+
+**Live demo:** [ziscus.com](https://ziscus.com)
 
 Inspired by [giscus](https://github.com/giscus/giscus), but different:
 
@@ -18,6 +22,15 @@ Two packages:
 - **`embed/`** — TypeScript library for rendering comments as static HTML (`ziscus` on npm)
 
 ## Quick start
+
+### CLI (fastest way)
+
+```bash
+npx ziscus init    # scaffold config and deploy the Worker
+npx ziscus fetch   # pull comments and render static HTML
+```
+
+That's it. The CLI handles Worker deployment, D1 setup, and code generation. Read on if you want to understand each piece or set things up manually.
 
 ### 1. Deploy the Worker
 

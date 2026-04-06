@@ -46,12 +46,7 @@ export async function handleListComments(request: Request, env: Env): Promise<Re
   binds.push(limit.toString(), offset.toString());
 
   const stmt = env.DB.prepare(query);
-  const bound = binds.length === 2 ? stmt.bind(binds[0], binds[1])
-    : binds.length === 3 ? stmt.bind(binds[0], binds[1], binds[2])
-    : binds.length === 4 ? stmt.bind(binds[0], binds[1], binds[2], binds[3])
-    : binds.length === 5 ? stmt.bind(binds[0], binds[1], binds[2], binds[3], binds[4])
-    : binds.length === 6 ? stmt.bind(binds[0], binds[1], binds[2], binds[3], binds[4], binds[5])
-    : stmt.bind(limit.toString(), offset.toString());
+  const bound = stmt.bind(...binds);
 
   const { results } = await bound.all();
   return new Response(JSON.stringify(results ?? []), { status: 200, headers: JSON_HEADERS });

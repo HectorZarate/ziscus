@@ -12,7 +12,7 @@ export interface Env {
   ADMIN_SECRET?: string;
   /** "on" (default) or "off" — whether new comments require approval */
   MODERATION: string;
-  /** Max comments per IP per hour. Default 5. */
+  /** Max comments per IP per hour. Default 30. */
   RATE_LIMIT?: string;
 }
 

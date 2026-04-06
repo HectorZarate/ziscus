@@ -54,7 +54,8 @@ export async function handleSubmit(
   // CSRF protection: reject if Origin doesn't match any allowed origin
   const origin = request.headers.get("Origin") ?? request.headers.get("Referer") ?? "";
   const allowedHosts = (env.ALLOWED_ORIGINS ?? "").split(",").map((h) => h.trim()).filter(Boolean);
-  if (origin && allowedHosts.length > 0 && !allowedHosts.some((h) => origin.includes(h))) {
+  const originHost = origin ? new URL(origin).hostname : "";
+  if (originHost && allowedHosts.length > 0 && !allowedHosts.some((h) => originHost === h || originHost.endsWith("." + h))) {
     return new Response("Invalid origin", { status: 403 });
   }
 

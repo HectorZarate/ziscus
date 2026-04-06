@@ -31,6 +31,13 @@
     "moderation",
     "anti-spam"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HectorZarate/ziscus",
+    "directory": "embed"
+  },
+  "homepage": "https://ziscus.com",
+  "bugs": "https://github.com/HectorZarate/ziscus/issues",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.19.17",

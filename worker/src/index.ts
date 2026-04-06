@@ -25,12 +25,16 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // CORS preflight for all routes
+    // CORS preflight
     if (request.method === "OPTIONS") {
+      const isAdmin = path.startsWith("/admin/");
+      const allowedOrigin = isAdmin
+        ? (env.ALLOWED_ORIGINS ?? "").split(",").map((h) => h.trim()).filter(Boolean)[0] ?? ""
+        : "*";
       return new Response(null, {
         status: 204,
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": allowedOrigin,
           "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Authorization, Content-Type",
           "Access-Control-Max-Age": "86400",
