@@ -837,4 +837,29 @@ describe("serveWithFreshComments", () => {
     expect(html).toContain("Zara");
     expect(html).not.toContain("Empty.");
   });
+
+  it("renders dates using requester timezone from cf object", async () => {
+    // April 6 at 00:06 UTC = April 5 in CDT (America/Chicago)
+    const mockEnv = makeMockEnv(STATIC_PAGE, [
+      { author: "Late", body: "Night post", created_at: "2026-04-06T00:06:00Z" },
+    ]);
+    const req = new Request("https://test.example.com/submit", {
+      method: "POST",
+      cf: { timezone: "America/Chicago" },
+    });
+    const res = await serveWithFreshComments("test", "/", req, mockEnv);
+    const html = await res.text();
+    expect(html).toContain("April 5, 2026");
+    expect(html).not.toContain("April 6");
+  });
+
+  it("falls back to UTC when no cf timezone", async () => {
+    const mockEnv = makeMockEnv(STATIC_PAGE, [
+      { author: "Utc", body: "UTC post", created_at: "2026-04-06T00:06:00Z" },
+    ]);
+    const req = new Request("https://test.example.com/submit", { method: "POST" });
+    const res = await serveWithFreshComments("test", "/", req, mockEnv);
+    const html = await res.text();
+    expect(html).toContain("April 6, 2026");
+  });
 });

@@ -4,12 +4,13 @@ import type { Env } from "./types.js";
 const REWRITER_COMMENT_LIMIT = 200;
 
 /** Render a single comment as HTML */
-function renderComment(author: string, body: string, createdAt: string): string {
+function renderComment(author: string, body: string, createdAt: string, timeZone: string = "UTC"): string {
   const date = new Date(createdAt);
   const formatted = date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone,
   });
 
   return `<article class="comment">
@@ -62,10 +63,13 @@ export async function serveWithFreshComments(
       });
     }
 
+    // Use the requester's timezone from Cloudflare, fall back to UTC
+    const tz = (request.cf as Record<string, unknown>)?.timezone as string || "UTC";
+
     const total = comments.length;
     const heading = `<h2>${total} ${total === 1 ? "Comment" : "Comments"}</h2>`;
     const commentHtml = comments
-      .map((c) => renderComment(c.author, c.body, c.created_at))
+      .map((c) => renderComment(c.author, c.body, c.created_at, tz))
       .join("\n      ");
     const freshSection = `${heading}\n      ${commentHtml}`;
 
