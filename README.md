@@ -92,15 +92,68 @@ Override CSS custom properties to match your site:
 
 Falls back to `--color-text`, `--color-bg`, etc. if your site already uses them.
 
-## Auto-rebuild on new comments
+### 4. Auto-rebuild on new comments
 
-If your site builds via GitHub Actions, ziscus can trigger a rebuild when a comment is approved:
+When a comment is posted, the commenter sees it instantly. To make it visible to everyone else, the static site needs to rebuild. ziscus triggers this automatically via GitHub Actions.
 
-1. Set `GITHUB_REPO` in wrangler.toml
-2. Set `GITHUB_TOKEN` as a Wrangler secret
-3. Add a workflow on `repository_dispatch` event type `rebuild-comments`
+**Set up the Worker secrets:**
 
-Rebuilds are debounced (30s window).
+```bash
+cd worker
+
+# Set your repo (owner/repo format)
+# Already in wrangler.toml as GITHUB_REPO — update it to match your repo
+
+# Create a fine-grained GitHub token:
+# → https://github.com/settings/personal-access-tokens/new
+# → Repository access: select your site repo
+# → Permissions: Contents → Read and write
+wrangler secret put GITHUB_TOKEN
+```
+
+**Add the workflow** (already included at `.github/workflows/rebuild-comments.yml`):
+
+```yaml
+name: Rebuild comments
+on:
+  repository_dispatch:
+    types: [rebuild-comments]
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      - name: Install rsslobster
+        run: |
+          git clone --depth 1 https://github.com/HectorZarate/rsslobster.git /tmp/rsslobster
+          cd /tmp/rsslobster
+          pnpm install --frozen-lockfile
+          pnpm build
+          pnpm link --global
+
+      - name: Regenerate site
+        run: cd site && rsslobster regenerate
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add site/_site/
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "rebuild: bake comments for ${{ github.event.client_payload.slug }}"
+          git push
+```
+
+The Worker debounces rebuild triggers (30s window) to avoid flooding on bulk approvals.
 
 ## Development
 
