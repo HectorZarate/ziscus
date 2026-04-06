@@ -3,6 +3,7 @@ import { handleSubmit } from "./submit.js";
 import { serveWithFreshComments } from "./html-rewriter.js";
 import { classifyComment } from "./classify.js";
 import { requireAuth } from "./auth.js";
+import { handleGetModLog } from "./mod-log.js";
 import {
   handleGetComments,
   handleApprove,
@@ -91,6 +92,7 @@ export default {
       if (path === "/admin/mode" && request.method === "GET") return handleGetMode(request, env);
       if (path === "/admin/ban" && request.method === "POST") return handleBanIp(request, env);
       if (path === "/admin/bans" && request.method === "GET") return handleListBans(request, env);
+      if (path === "/admin/mod-log" && request.method === "GET") return handleGetModLog(request, env);
       if (path === "/admin/bulk/approve" && request.method === "POST") return handleBulkApprove(request, env);
 
       if (path === "/admin/classify" && request.method === "POST") {

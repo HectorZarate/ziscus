@@ -3,6 +3,7 @@ import { checkRateLimit } from "./rate-limit.js";
 import { triggerRebuild } from "./debounce.js";
 import { serveWithFreshComments } from "./html-rewriter.js";
 import { classifyComment } from "./classify.js";
+import { logModAction } from "./mod-log.js";
 
 const MAX_AUTHOR_LENGTH = 100;
 const MAX_BODY_LENGTH = 10000;
@@ -98,7 +99,10 @@ export async function handleSubmit(
   }
 
   // AI spam classification (skip if paused — pause means review everything)
+  const classifyStart = Date.now();
   const classification = mode === "paused" ? "approve" as const : await classifyComment(author, body, env);
+  const classifyMs = Date.now() - classifyStart;
+
   const aiOverride = classification === "spam" ? "spam" as const
     : classification === "review" ? "pending" as const
     : null;
@@ -110,11 +114,23 @@ export async function handleSubmit(
   const status = aiOverride
     ?? (mode === "paused" ? "pending" : (env.MODERATION === "on" ? "pending" : "approved"));
 
+  // Generate ID so we can reference it in the mod log
+  const commentId = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+
   await env.DB.prepare(
-    "INSERT INTO comments (slug, author, body, status, ip_hash) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO comments (id, slug, author, body, status, ip_hash) VALUES (?, ?, ?, ?, ?, ?)",
   )
-    .bind(slug, safeAuthor, safeBody, status, ipHash)
+    .bind(commentId, slug, safeAuthor, safeBody, status, ipHash)
     .run();
+
+  // Log AI decision
+  if (env.AI_MOD && mode !== "paused") {
+    await logModAction(env.DB, `ai_${classification}`, "ai", {
+      commentId, slug,
+      metadata: { model: "@cf/meta/llama-3.1-8b-instruct", latency_ms: classifyMs },
+    });
+  }
 
   // Trigger debounced rebuild if auto-approved
   if (status === "approved") {

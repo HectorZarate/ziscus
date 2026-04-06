@@ -1,5 +1,6 @@
 import type { Env } from "./types.js";
 import { requireAuth } from "./auth.js";
+import { logModAction } from "./mod-log.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -64,6 +65,7 @@ export async function handleSetMode(request: Request, env: Env): Promise<Respons
   }
 
   await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('comments_mode', ?)").bind(mode).run();
+  await logModAction(env.DB, "mode_change", "admin", { reason: `mode → ${mode}` });
   return new Response(JSON.stringify({ ok: true, mode }), { status: 200, headers: JSON_HEADERS });
 }
 
@@ -88,6 +90,7 @@ export async function handleBanIp(request: Request, env: Env): Promise<Response>
   }
 
   await env.DB.prepare("INSERT OR REPLACE INTO banned_ips (ip_hash, reason) VALUES (?, ?)").bind(body.ip_hash, body.reason ?? "").run();
+  await logModAction(env.DB, "ban", "admin", { reason: body.reason ?? "" });
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_HEADERS });
 }
 
@@ -97,6 +100,7 @@ export async function handleUnbanIp(ipHash: string, request: Request, env: Env):
   if (authErr) return authErr;
 
   await env.DB.prepare("DELETE FROM banned_ips WHERE ip_hash = ?").bind(ipHash).run();
+  await logModAction(env.DB, "unban", "admin");
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_HEADERS });
 }
 

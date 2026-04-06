@@ -1,6 +1,7 @@
 import type { Env } from "./types.js";
 import { requireAuth } from "./auth.js";
 import { triggerRebuild } from "./debounce.js";
+import { logModAction } from "./mod-log.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 const OK_RESPONSE = () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_HEADERS });
@@ -45,6 +46,7 @@ export async function handleApprove(id: string, request: Request, env: Env): Pro
   if (comment instanceof Response) return comment;
 
   await env.DB.prepare("UPDATE comments SET status = 'approved', approved_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?").bind(id).run();
+  await logModAction(env.DB, "approve", "admin", { commentId: id, slug: comment.slug });
   await triggerRebuild(env.DB, env, comment.slug);
   return OK_RESPONSE();
 }
@@ -58,6 +60,7 @@ export async function handleReject(id: string, request: Request, env: Env): Prom
   if (comment instanceof Response) return comment;
 
   await env.DB.prepare("UPDATE comments SET status = 'rejected' WHERE id = ?").bind(id).run();
+  await logModAction(env.DB, "reject", "admin", { commentId: id, slug: comment.slug });
   return OK_RESPONSE();
 }
 
@@ -70,6 +73,7 @@ export async function handleSpam(id: string, request: Request, env: Env): Promis
   if (comment instanceof Response) return comment;
 
   await env.DB.prepare("UPDATE comments SET status = 'spam' WHERE id = ?").bind(id).run();
+  await logModAction(env.DB, "spam", "admin", { commentId: id, slug: comment.slug });
   return OK_RESPONSE();
 }
 
@@ -82,6 +86,7 @@ export async function handleUnapprove(id: string, request: Request, env: Env): P
   if (comment instanceof Response) return comment;
 
   await env.DB.prepare("UPDATE comments SET status = 'pending', approved_at = NULL WHERE id = ?").bind(id).run();
+  await logModAction(env.DB, "unapprove", "admin", { commentId: id, slug: comment.slug });
   await triggerRebuild(env.DB, env, comment.slug);
   return OK_RESPONSE();
 }
@@ -94,6 +99,7 @@ export async function handleDeleteComment(id: string, request: Request, env: Env
   const comment = await findComment(id, env);
   if (comment instanceof Response) return comment;
 
+  await logModAction(env.DB, "delete", "admin", { commentId: id, slug: comment.slug });
   await env.DB.prepare("DELETE FROM comments WHERE id = ?").bind(id).run();
   return OK_RESPONSE();
 }
