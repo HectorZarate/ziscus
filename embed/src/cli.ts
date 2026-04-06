@@ -31,6 +31,12 @@ program
       rl.close();
     }
 
+    const validSSGs = ["hugo", "astro", "eleventy", "jekyll", "nextjs"];
+    if (!validSSGs.includes(ssg)) {
+      console.error(`Unknown SSG: "${ssg}". Must be one of: ${validSSGs.join(", ")}`);
+      process.exit(1);
+    }
+
     await runInit({ endpoint, ssg, theme, dir: "." });
     console.log(`\n✓ ziscus initialized for ${ssg} with ${theme} theme`);
     console.log(`✓ Created ziscus.config.json`);
