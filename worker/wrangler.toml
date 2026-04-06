@@ -22,6 +22,9 @@ MODERATION = "off"
 RATE_LIMIT = "30"
 GITHUB_REPO = "HectorZarate/ziscus"
 
+[ai]
+binding = "AI_MOD"
+
 # Secrets — set via `wrangler secret put`, never commit values:
 # ADMIN_SECRET — for approving/rejecting comments
 # GITHUB_TOKEN — for repository_dispatch rebuild triggers

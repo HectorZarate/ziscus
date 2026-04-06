@@ -31,13 +31,13 @@ describe("ai-mod enable", () => {
 
     const toml = await readFile(wranglerPath, "utf-8");
     expect(toml).toContain("[ai]");
-    expect(toml).toContain('binding = "AI"');
+    expect(toml).toContain('binding = "AI_MOD"');
   });
 
   it("skips if [ai] binding already exists", async () => {
     await writeFile(join(dir, "ziscus.config.json"), JSON.stringify({ endpoint: "https://e.com" }));
     const wranglerPath = join(dir, "wrangler.toml");
-    await writeFile(wranglerPath, 'name = "test"\n\n[ai]\nbinding = "AI"\n');
+    await writeFile(wranglerPath, 'name = "test"\n\n[ai]\nbinding = "AI_MOD"\n');
 
     const result = await runAiModEnable({ dir, wranglerPath, deploy: false });
     expect(result.ok).toBe(true);

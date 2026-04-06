@@ -10,7 +10,7 @@ function mockEnv(response?: string | Error): Env {
     : undefined;
 
   return {
-    AI: ai as unknown as Env["AI"],
+    AI_MOD: ai as unknown as Env["AI_MOD"],
     DB: {} as unknown as Env["DB"],
     ASSETS: {} as unknown as Env["ASSETS"],
     ALLOWED_ORIGINS: "",
@@ -29,11 +29,11 @@ function envWithoutAI(): Env {
 
 function slowEnv(delayMs: number): Env {
   return {
-    AI: {
+    AI_MOD: {
       run: vi.fn().mockImplementation(() =>
         new Promise((resolve) => setTimeout(() => resolve({ response: "approve" }), delayMs))
       ),
-    } as unknown as Env["AI"],
+    } as unknown as Env["AI_MOD"],
     DB: {} as unknown as Env["DB"],
     ASSETS: {} as unknown as Env["ASSETS"],
     ALLOWED_ORIGINS: "",
@@ -102,7 +102,7 @@ describe("classifyComment", () => {
     const env = mockEnv("approve");
     const longBody = "a".repeat(1000);
     await classifyComment("test", longBody, env);
-    const call = (env.AI!.run as ReturnType<typeof vi.fn>).mock.calls[0];
+    const call = (env.AI_MOD!.run as ReturnType<typeof vi.fn>).mock.calls[0];
     const userMessage = call[1].messages[1].content;
     // Body should be truncated, not the full 1000 chars
     expect(userMessage.length).toBeLessThan(700);
@@ -111,7 +111,7 @@ describe("classifyComment", () => {
   it("strips < and > from author and body", async () => {
     const env = mockEnv("approve");
     await classifyComment("<script>alert</script>", "test <img src=x>", env);
-    const call = (env.AI!.run as ReturnType<typeof vi.fn>).mock.calls[0];
+    const call = (env.AI_MOD!.run as ReturnType<typeof vi.fn>).mock.calls[0];
     const userMessage = call[1].messages[1].content;
     expect(userMessage).not.toContain("<");
     expect(userMessage).not.toContain(">");
@@ -122,7 +122,7 @@ describe("classifyComment", () => {
   it("calls AI with correct model and parameters", async () => {
     const env = mockEnv("approve");
     await classifyComment("Alice", "Great post!", env);
-    const call = (env.AI!.run as ReturnType<typeof vi.fn>).mock.calls[0];
+    const call = (env.AI_MOD!.run as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(call[0]).toBe("@cf/meta/llama-3.1-8b-instruct");
     expect(call[1].max_tokens).toBe(5);
     expect(call[1].temperature).toBe(0);

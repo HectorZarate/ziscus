@@ -37,7 +37,7 @@ export async function runAiModEnable(options: EnableOptions): Promise<EnableResu
   }
 
   // Append [ai] binding
-  const binding = '\n[ai]\nbinding = "AI"\n';
+  const binding = '\n[ai]\nbinding = "AI_MOD"\n';
   await writeFile(wranglerPath, toml + binding);
 
   return { ok: true };
@@ -47,7 +47,7 @@ export function runAiModDisable(): string {
   return `To disable AI moderation, remove or comment out the [ai] section from your worker/wrangler.toml:
 
   # [ai]
-  # binding = "AI"
+  # binding = "AI_MOD"
 
 Then redeploy: cd worker && wrangler deploy
 

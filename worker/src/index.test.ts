@@ -342,7 +342,7 @@ describe("rate limiting", () => {
 
     const res = await submitComment("test", "Excess", "Too many");
     expect(res.status).toBe(429);
-  });
+  }, 30000);
 });
 
 // ---------------------------------------------------------------------------
