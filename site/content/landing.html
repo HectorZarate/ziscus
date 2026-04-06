@@ -31,26 +31,6 @@ your SSG bakes them into HTML at build time.
 
 <hr>
 
-<h2>Quick start</h2>
-
-<pre><code># 1. Deploy
-cd worker && pnpm install
-wrangler d1 create ziscus-comments
-wrangler d1 execute ziscus-comments --remote --file=src/schema.sql
-openssl rand -hex 32 | wrangler secret put ADMIN_SECRET
-wrangler deploy
-
-# 2. Embed
-# Add a &lt;form&gt; that POSTs to your-worker.workers.dev/submit
-# See README for full HTML snippet
-
-# 3. Moderate (optional)
-curl -H "Authorization: Bearer $SECRET" your-worker.workers.dev/admin/comments?status=pending
-curl -X POST -H "Authorization: Bearer $SECRET" your-worker.workers.dev/approve/ID
-</code></pre>
-
-<hr>
-
 <h2>Try it out</h2>
 
 <p>Leave a comment below. It will appear instantly for you and appear on the site live in ~60 seconds.</p>
