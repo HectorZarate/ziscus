@@ -10,7 +10,7 @@
   "repo": "https://github.com/HectorZarate/ziscus",
   "permalink": "/posts/:slug/index.html",
   "homepage": "landing",
-  "commentsEndpoint": "https://ziscus.hdz.workers.dev",
+  "commentsEndpoint": "https://ziscus.com",
   "pages": [
     {
       "title": "ziscus",
