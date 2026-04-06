@@ -478,6 +478,7 @@ then regenerate your static site to see new comments. Ziscus uses GitHub Actions
 <li><strong>Cloudflare D1</strong> &mdash; SQLite at the edge, not GitHub Discussions</li>
 <li><strong>Optional moderation</strong> &mdash; auto-approve, or review first with approve / reject / spam / ban</li>
 <li><strong>Free</strong> &mdash; runs on Cloudflare's free tier</li>
+<li><strong>Works with any SSG</strong> &mdash; Hugo, Astro, Eleventy, Jekyll, Next.js</li>
 </ul>
 
 <hr>
@@ -485,10 +486,9 @@ then regenerate your static site to see new comments. Ziscus uses GitHub Actions
 <h2>How it works</h2>
 
 <ol>
-<li>Add an HTML form to your page that POSTs to your ziscus Worker</li>
-<li>The Worker validates, escapes, rate-limits, and stores the comment in D1</li>
-<li>The commenter sees their comment instantly via HTMLRewriter</li>
-<li>Your static site rebuilds to bake approved comments into HTML</li>
+<li>Run <code>npx ziscus init</code> to generate the template and workflow for your SSG</li>
+<li>Deploy the Worker to Cloudflare</li>
+<li>The commenter sees their comment instantly. Your site rebuilds automatically</li>
 </ol>
 
 <hr>
