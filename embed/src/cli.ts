@@ -8,6 +8,7 @@ import { runInit } from "./cli/init.js";
 import { runFetch, extractSlugsFromSitemap } from "./cli/fetch.js";
 import { runAiModEnable, runAiModDisable, runAiModStatus } from "./cli/ai-mod.js";
 import { runExport } from "./cli/export.js";
+import { runModLog } from "./cli/mod-log.js";
 import { loadEnvFile } from "./cli/load-env.js";
 
 // Auto-load .env from project root (does not override existing vars)
@@ -156,6 +157,53 @@ program
 
     const result = await res.json() as { comments: number; bans: number; modLog: number };
     console.log(`✓ Imported ${result.comments} comments, ${result.bans} bans, ${result.modLog} mod log entries`);
+  });
+
+program
+  .command("mod-log")
+  .description("View the moderation log")
+  .option("--action <action>", "Filter by action (ai_spam, ai_approve, approve, reject, spam, delete)")
+  .option("--actor <actor>", "Filter by actor (ai, admin)")
+  .option("--slug <slug>", "Filter by page slug")
+  .option("--limit <n>", "Number of entries to show", "20")
+  .option("--endpoint <url>", "Worker endpoint")
+  .action(async (opts) => {
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) {
+      console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment.");
+      process.exit(1);
+    }
+
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try {
+        const config = JSON.parse(await readFile("ziscus.config.json", "utf-8"));
+        endpoint = config.endpoint;
+      } catch {
+        console.error("Error: No --endpoint and no ziscus.config.json. Run `npx ziscus init` first.");
+        process.exit(1);
+      }
+    }
+
+    const lines = await runModLog({
+      endpoint,
+      secret,
+      action: opts.action,
+      actor: opts.actor,
+      slug: opts.slug,
+      limit: parseInt(opts.limit, 10),
+    });
+
+    if (lines.length === 0) {
+      console.log("No mod log entries found.");
+      return;
+    }
+
+    console.log("Timestamp             Actor  Action         Slug       Latency  Comment");
+    console.log("─".repeat(100));
+    for (const line of lines) {
+      console.log(line);
+    }
   });
 
 const aiMod = program
