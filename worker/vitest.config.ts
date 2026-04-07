@@ -7,6 +7,9 @@ export default defineWorkersConfig({
         wrangler: { configPath: "./wrangler.toml" },
         miniflare: {
           d1Databases: ["DB"],
+          bindings: {
+            ADMIN_SECRET: "test-admin-secret",
+          },
         },
       },
     },
