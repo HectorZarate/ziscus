@@ -1,0 +1,118 @@
+<p>How ziscus compares to other comment systems for static sites.</p>
+
+<h2>Feature comparison</h2>
+
+<table>
+<tr>
+  <th></th>
+  <th><strong>ziscus</strong></th>
+  <th>giscus</th>
+  <th>Disqus</th>
+  <th>Isso</th>
+  <th>Remark42</th>
+</tr>
+<tr>
+  <td><strong>Client JavaScript</strong></td>
+  <td>None</td>
+  <td>iframe + JS</td>
+  <td>Heavy JS</td>
+  <td>~8 KB JS</td>
+  <td>~40 KB JS</td>
+</tr>
+<tr>
+  <td><strong>Account required</strong></td>
+  <td>No</td>
+  <td>GitHub</td>
+  <td>Disqus / social</td>
+  <td>No</td>
+  <td>Optional</td>
+</tr>
+<tr>
+  <td><strong>Data ownership</strong></td>
+  <td>Your D1 database</td>
+  <td>GitHub Discussions</td>
+  <td>Disqus servers</td>
+  <td>Your SQLite file</td>
+  <td>Your server</td>
+</tr>
+<tr>
+  <td><strong>Hosting</strong></td>
+  <td>Cloudflare (edge)</td>
+  <td>GitHub</td>
+  <td>Disqus SaaS</td>
+  <td>Self-hosted server</td>
+  <td>Self-hosted server</td>
+</tr>
+<tr>
+  <td><strong>AI spam filtering</strong></td>
+  <td>Workers AI (free tier)</td>
+  <td>No</td>
+  <td>Yes (proprietary)</td>
+  <td>Akismet (paid)</td>
+  <td>Basic filters</td>
+</tr>
+<tr>
+  <td><strong>Cost</strong></td>
+  <td>Free (Cloudflare free tier)</td>
+  <td>Free</td>
+  <td>Free with ads / $12/mo</td>
+  <td>Free (+ server cost)</td>
+  <td>Free (+ server cost)</td>
+</tr>
+<tr>
+  <td><strong>Server required</strong></td>
+  <td>No (serverless)</td>
+  <td>No</td>
+  <td>No</td>
+  <td>Yes (Python)</td>
+  <td>Yes (Go/Docker)</td>
+</tr>
+<tr>
+  <td><strong>Tracking / ads</strong></td>
+  <td>None</td>
+  <td>None</td>
+  <td>Yes (free tier)</td>
+  <td>None</td>
+  <td>None</td>
+</tr>
+<tr>
+  <td><strong>Moderation CLI</strong></td>
+  <td>Yes (approve/reject/spam/ban)</td>
+  <td>GitHub UI</td>
+  <td>Disqus dashboard</td>
+  <td>Admin panel</td>
+  <td>Admin UI</td>
+</tr>
+<tr>
+  <td><strong>Instant feedback</strong></td>
+  <td>HTMLRewriter (no JS)</td>
+  <td>Client JS</td>
+  <td>Client JS</td>
+  <td>Client JS</td>
+  <td>Client JS</td>
+</tr>
+<tr>
+  <td><strong>SSG support</strong></td>
+  <td>Hugo, Astro, Eleventy, Jekyll, Next.js</td>
+  <td>Any (JS embed)</td>
+  <td>Any (JS embed)</td>
+  <td>Any (JS embed)</td>
+  <td>Any (JS embed)</td>
+</tr>
+<tr>
+  <td><strong>Setup time</strong></td>
+  <td>~3 minutes (<code>npx ziscus deploy</code>)</td>
+  <td>~5 minutes</td>
+  <td>~2 minutes</td>
+  <td>~30 minutes</td>
+  <td>~30 minutes</td>
+</tr>
+</table>
+
+<h2>Why ziscus?</h2>
+
+<p>If you care about: zero JavaScript on your pages, anonymous commenting without accounts, owning your data, and not running a server, ziscus is the only option that checks all four boxes.</p>
+
+<p>giscus is closest but requires GitHub accounts and loads JavaScript. Isso and Remark42 are great self-hosted options but need a running server. Disqus is easy but tracks your visitors and serves ads.</p>
+
+<p><a href="/">Back to ziscus.com</a> | <a href="https://github.com/HectorZarate/ziscus">Source on GitHub</a></p>

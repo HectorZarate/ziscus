@@ -4,6 +4,7 @@ import { serveWithFreshComments } from "./html-rewriter.js";
 import { classifyComment } from "./classify.js";
 import { requireAuth } from "./auth.js";
 import { handleGetModLog } from "./mod-log.js";
+import { handleDashboard } from "./dashboard.js";
 import {
   handleGetComments,
   handleApprove,
@@ -88,6 +89,7 @@ export default {
 
     // /admin/* — authenticated management endpoints
     if (path.startsWith("/admin/")) {
+      if (path === "/admin/dashboard" && request.method === "GET") return handleDashboard(request, env);
       if (path === "/admin/stats" && request.method === "GET") return handleGetStats(request, env);
       if (path === "/admin/comments" && request.method === "GET") return handleListComments(request, env);
       if (path === "/admin/mode" && request.method === "POST") return handleSetMode(request, env);

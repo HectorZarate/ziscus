@@ -17,6 +17,24 @@
       "slug": "landing",
       "bodyFile": "content/landing.html",
       "layout": "default"
+    },
+    {
+      "title": "ziscus vs giscus, Disqus, Isso, Remark42",
+      "slug": "compare",
+      "bodyFile": "content/compare.html",
+      "layout": "default"
+    },
+    {
+      "title": "Add comments to Hugo in 5 minutes",
+      "slug": "quickstart-hugo",
+      "bodyFile": "content/quickstart-hugo.html",
+      "layout": "default"
+    },
+    {
+      "title": "Add comments to Astro in 5 minutes",
+      "slug": "quickstart-astro",
+      "bodyFile": "content/quickstart-astro.html",
+      "layout": "default"
     }
   ]
 }
