@@ -10,6 +10,15 @@ import { runAiModEnable, runAiModDisable, runAiModStatus } from "./cli/ai-mod.js
 import { runExport } from "./cli/export.js";
 import { runModLog } from "./cli/mod-log.js";
 import { loadEnvFile } from "./cli/load-env.js";
+import {
+  checkWranglerVersion,
+  checkWranglerAuth,
+  createD1Database,
+  applySchema,
+  generateSecret,
+  setWranglerSecret,
+  deployWorker,
+} from "./cli/deploy.js";
 
 // Auto-load .env from project root (does not override existing vars)
 loadEnvFile(resolve(process.cwd(), ".env"));
@@ -17,7 +26,7 @@ loadEnvFile(resolve(process.cwd(), ".env"));
 const program = new Command()
   .name("ziscus")
   .description("Zero-JavaScript anonymous comment system")
-  .version("0.1.0"); // Keep in sync with package.json version
+  .version("0.2.0"); // Keep in sync with package.json version
 
 program
   .command("init")
@@ -49,6 +58,117 @@ program
     console.log(`\n✓ ziscus initialized for ${ssg} with ${theme} theme`);
     console.log(`✓ Created ziscus.config.json`);
     console.log(`\nSee the generated files for usage instructions.`);
+  });
+
+program
+  .command("deploy")
+  .description("Deploy the ziscus Worker to Cloudflare (creates D1 database, sets secrets, deploys)")
+  .option("--ssg <name>", "Static site generator (hugo, astro, eleventy, jekyll, nextjs)")
+  .option("--site-url <url>", "Your site URL (e.g. https://myblog.com)")
+  .option("--db-name <name>", "D1 database name", "ziscus-comments")
+  .option("--worker-dir <path>", "Path to worker directory", "./worker")
+  .action(async (opts) => {
+    console.log("Deploying ziscus...\n");
+
+    // Step 1: Check wrangler
+    try {
+      checkWranglerVersion();
+      console.log("✓ wrangler found");
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+
+    try {
+      checkWranglerAuth();
+      console.log("✓ Authenticated with Cloudflare");
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+
+    // Step 2: Gather inputs
+    let { ssg, siteUrl, dbName, workerDir } = opts;
+    const validSSGs = ["hugo", "astro", "eleventy", "jekyll", "nextjs"];
+
+    if (!ssg || !siteUrl) {
+      const rl = createInterface({ input: stdin, output: stdout });
+      if (!siteUrl) siteUrl = await rl.question("Site URL (e.g. https://myblog.com): ");
+      if (!ssg) ssg = await rl.question("SSG (hugo / astro / eleventy / jekyll / nextjs): ");
+      rl.close();
+    }
+
+    if (!validSSGs.includes(ssg)) {
+      console.error(`Unknown SSG: "${ssg}". Must be one of: ${validSSGs.join(", ")}`);
+      process.exit(1);
+    }
+
+    // Step 3: Create D1 database
+    let dbId: string;
+    try {
+      console.log(`\nCreating D1 database "${dbName}"...`);
+      dbId = createD1Database(dbName);
+      console.log(`✓ D1 database created (${dbId.slice(0, 8)}...)`);
+    } catch (err) {
+      console.error(`Failed to create D1 database. Run manually: wrangler d1 create ${dbName}`);
+      process.exit(1);
+    }
+
+    // Step 4: Apply schema
+    const schemaPath = `${workerDir}/src/schema.sql`;
+    try {
+      console.log("Applying database schema...");
+      applySchema(dbName, schemaPath);
+      console.log("✓ Schema applied");
+    } catch (err) {
+      console.error(`Schema failed. Run manually: wrangler d1 execute ${dbName} --remote --file=${schemaPath}`);
+      process.exit(1);
+    }
+
+    // Step 5: Generate and set admin secret
+    const adminSecret = generateSecret();
+    try {
+      console.log("Setting admin secret...");
+      setWranglerSecret("ADMIN_SECRET", adminSecret);
+      console.log("✓ Admin secret set");
+    } catch (err) {
+      console.error("Failed to set secret. Run manually: wrangler secret put ADMIN_SECRET");
+      process.exit(1);
+    }
+
+    // Step 6: Deploy worker
+    let workerUrl = "";
+    try {
+      console.log("Deploying Worker...");
+      workerUrl = deployWorker(workerDir);
+      console.log(`✓ Worker deployed${workerUrl ? ` → ${workerUrl}` : ""}`);
+    } catch (err) {
+      console.error(`Deploy failed. Run manually: cd ${workerDir} && wrangler deploy`);
+      process.exit(1);
+    }
+
+    // Step 7: Save .env
+    const { writeFile: writeF } = await import("node:fs/promises");
+    const envContent = `ZISCUS_ADMIN_SECRET=${adminSecret}\n`;
+    await writeF(".env", envContent);
+    console.log("✓ Admin secret saved to .env");
+
+    // Step 8: Run init for SSG
+    const endpoint = siteUrl.replace(/\/$/, "");
+    try {
+      await runInit({ endpoint, ssg, theme: "light", dir: "." });
+      console.log(`✓ SSG templates generated for ${ssg}`);
+    } catch (err) {
+      console.error(`Init failed. Run manually: npx ziscus init --endpoint ${endpoint} --ssg ${ssg}`);
+    }
+
+    console.log(`\n${"─".repeat(50)}`);
+    console.log("Done. Comments are live.");
+    console.log(`  Worker:  ${workerUrl || "(check wrangler output)"}`);
+    console.log(`  Secret:  saved to .env`);
+    console.log(`  AI mod:  npx ziscus ai-mod enable`);
+    console.log(`\nBack up your admin secret somewhere safe.`);
+    console.log(`Cloudflare secrets are write-only — you cannot retrieve them later.`);
   });
 
 program
@@ -233,7 +353,7 @@ aiMod
     }
 
     console.log("✓ Added [ai] binding to wrangler.toml");
-    console.log("\nNote: Workers AI free tier supports ~20-30 classifications/day.");
+    console.log("\nNote: Workers AI free tier supports ~3,000 classifications/day.");
     console.log("For higher volume: Workers Paid ($5/mo). Without AI: unlimited, no cost.");
     console.log("\nDeploy your worker to activate: cd worker && wrangler deploy");
   });
