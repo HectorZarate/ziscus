@@ -26,7 +26,7 @@ loadEnvFile(resolve(process.cwd(), ".env"));
 const program = new Command()
   .name("ziscus")
   .description("Zero-JavaScript anonymous comment system")
-  .version("0.2.0"); // Keep in sync with package.json version
+  .version("0.3.0"); // Keep in sync with package.json version
 
 program
   .command("init")
