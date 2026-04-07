@@ -31,8 +31,8 @@ export async function handleGetComments(
 }
 
 /** Helper: find comment or return 404 */
-async function findComment(id: string, env: Env): Promise<{ slug: string } | Response> {
-  const comment = await env.DB.prepare("SELECT slug FROM comments WHERE id = ?").bind(id).first<{ slug: string }>();
+async function findComment(id: string, env: Env): Promise<{ slug: string; status: string } | Response> {
+  const comment = await env.DB.prepare("SELECT slug, status FROM comments WHERE id = ?").bind(id).first<{ slug: string; status: string }>();
   if (!comment) return new Response("Not found", { status: 404 });
   return comment;
 }
@@ -72,8 +72,10 @@ export async function handleSpam(id: string, request: Request, env: Env): Promis
   const comment = await findComment(id, env);
   if (comment instanceof Response) return comment;
 
+  const wasApproved = comment.status === "approved";
   await env.DB.prepare("UPDATE comments SET status = 'spam' WHERE id = ?").bind(id).run();
   await logModAction(env.DB, "spam", "admin", { commentId: id, slug: comment.slug });
+  if (wasApproved) await triggerRebuild(env.DB, env, comment.slug);
   return OK_RESPONSE();
 }
 
@@ -99,7 +101,9 @@ export async function handleDeleteComment(id: string, request: Request, env: Env
   const comment = await findComment(id, env);
   if (comment instanceof Response) return comment;
 
+  const wasApproved = comment.status === "approved";
   await logModAction(env.DB, "delete", "admin", { commentId: id, slug: comment.slug });
   await env.DB.prepare("DELETE FROM comments WHERE id = ?").bind(id).run();
+  if (wasApproved) await triggerRebuild(env.DB, env, comment.slug);
   return OK_RESPONSE();
 }

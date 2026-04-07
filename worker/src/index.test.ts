@@ -455,6 +455,36 @@ describe("POST /spam/:id", () => {
     expect(comment!.status).toBe("spam");
   });
 
+  it("triggers rebuild when spamming a previously approved comment", async () => {
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare(
+      "INSERT INTO comments (id, slug, author, body, status) VALUES ('s2', 'test', 'Ada', 'Was approved', 'approved')",
+    ).run();
+
+    await SELF.fetch("https://test.example.com/spam/s2", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const row = await env.DB.prepare("SELECT value FROM meta WHERE key = 'last_rebuild'").first<{ value: string }>();
+    expect(row).toBeTruthy();
+  });
+
+  it("does not trigger rebuild when spamming a pending comment", async () => {
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare(
+      "INSERT INTO comments (id, slug, author, body, status) VALUES ('s3', 'test', 'Ada', 'Was pending', 'pending')",
+    ).run();
+
+    await SELF.fetch("https://test.example.com/spam/s3", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const row = await env.DB.prepare("SELECT value FROM meta WHERE key = 'last_rebuild'").first();
+    expect(row).toBeNull();
+  });
+
   it("returns 401 without auth", async () => {
     const res = await SELF.fetch("https://test.example.com/spam/s1", { method: "POST" });
     expect(res.status).toBe(401);
@@ -520,6 +550,36 @@ describe("DELETE /comments/:id", () => {
 
     const comment = await env.DB.prepare("SELECT id FROM comments WHERE id = 'd1'").first();
     expect(comment).toBeNull();
+  });
+
+  it("triggers rebuild when deleting a previously approved comment", async () => {
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare(
+      "INSERT INTO comments (id, slug, author, body, status) VALUES ('d2', 'test', 'Ada', 'Was approved', 'approved')",
+    ).run();
+
+    await SELF.fetch("https://test.example.com/comments/d2", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const row = await env.DB.prepare("SELECT value FROM meta WHERE key = 'last_rebuild'").first<{ value: string }>();
+    expect(row).toBeTruthy();
+  });
+
+  it("does not trigger rebuild when deleting a pending comment", async () => {
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare(
+      "INSERT INTO comments (id, slug, author, body, status) VALUES ('d3', 'test', 'Ada', 'Was pending', 'pending')",
+    ).run();
+
+    await SELF.fetch("https://test.example.com/comments/d3", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const row = await env.DB.prepare("SELECT value FROM meta WHERE key = 'last_rebuild'").first();
+    expect(row).toBeNull();
   });
 
   it("returns 401 without auth", async () => {

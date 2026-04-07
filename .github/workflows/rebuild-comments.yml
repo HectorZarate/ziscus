@@ -28,6 +28,7 @@ jobs:
         run: cd site && rsslobster regenerate
 
       - name: Export backup
+        continue-on-error: true
         run: npx ziscus export --output backups/ --endpoint https://ziscus.com
         env:
           ZISCUS_ADMIN_SECRET: ${{ secrets.ZISCUS_ADMIN_SECRET }}
