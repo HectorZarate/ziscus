@@ -42,9 +42,10 @@ wrangler d1 create ziscus-comments
 # Update wrangler.toml with your database_id and ALLOWED_ORIGINS
 wrangler d1 execute ziscus-comments --remote --file=src/schema.sql
 
-# Generate and set admin secret
-openssl rand -hex 32
-wrangler secret put ADMIN_SECRET
+# Generate and set admin secret (save it somewhere safe — you can't retrieve it later)
+NEW_SECRET=$(openssl rand -hex 32)
+echo "$NEW_SECRET" | wrangler secret put ADMIN_SECRET
+echo "ZISCUS_ADMIN_SECRET=$NEW_SECRET" > ../.env
 
 wrangler deploy
 ```
@@ -175,6 +176,53 @@ pnpm install
 pnpm test
 pnpm typecheck
 ```
+
+## Key management
+
+ziscus uses two secrets. Both are stateless auth tokens — rotating them loses no data.
+
+| Secret | Where it lives | What it guards |
+|---|---|---|
+| `ADMIN_SECRET` | Cloudflare Workers secret | All admin API endpoints |
+| `GITHUB_TOKEN` | Cloudflare Workers secret | GitHub Actions rebuild trigger |
+
+### Local `.env` file
+
+The CLI and eval suite read `ZISCUS_ADMIN_SECRET` from a `.env` file in the project root (already in `.gitignore`):
+
+```
+ZISCUS_ADMIN_SECRET=your-secret-here
+```
+
+This is loaded automatically by `npx ziscus ai-mod status`, `npx ziscus ai-mod test`, and the eval suite.
+
+### Rotating ADMIN_SECRET
+
+```bash
+# 1. Generate a new secret
+NEW_SECRET=$(openssl rand -hex 32)
+
+# 2. Push to Cloudflare (takes effect immediately — old key stops working)
+echo "$NEW_SECRET" | npx wrangler secret put ADMIN_SECRET
+
+# 3. Save locally for CLI/eval use
+echo "ZISCUS_ADMIN_SECRET=$NEW_SECRET" > .env
+
+# 4. Back up your secret somewhere safe (password manager, etc.)
+#    Cloudflare secrets are write-only — you cannot retrieve them later.
+
+# 5. Verify
+source .env
+curl -s -H "Authorization: Bearer $ZISCUS_ADMIN_SECRET" https://your-worker.workers.dev/admin/stats
+```
+
+> **Back up your admin secret.** Cloudflare secrets are write-only — `wrangler secret list` shows names but not values. If you lose it, you must rotate again.
+
+### Rotating GITHUB_TOKEN
+
+1. Revoke the old token at [github.com/settings/tokens](https://github.com/settings/tokens)
+2. Create a new fine-grained PAT (Repository access → your site repo, Permissions → Contents: Read and write)
+3. `npx wrangler secret put GITHUB_TOKEN` and paste the new token
 
 ## License
 

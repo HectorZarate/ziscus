@@ -4,6 +4,7 @@ import { triggerRebuild } from "./debounce.js";
 import { serveWithFreshComments } from "./html-rewriter.js";
 import { classifyComment } from "./classify.js";
 import { logModAction } from "./mod-log.js";
+import { structuralFilter } from "./structural-filter.js";
 
 const MAX_AUTHOR_LENGTH = 100;
 const MAX_BODY_LENGTH = 10000;
@@ -83,6 +84,12 @@ export async function handleSubmit(
   if (urlCount > MAX_URLS_IN_BODY)
     return new Response("Too many URLs", { status: 400 });
 
+  // Layer 0: structural / malicious payload filter
+  const filter = structuralFilter(author, body);
+  if (filter.blocked) {
+    return new Response(filter.reason, { status: 400 });
+  }
+
   // Rate limiting
   const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
   const ipHash = await hashIp(ip);
@@ -103,16 +110,28 @@ export async function handleSubmit(
   const classification = mode === "paused" ? "approve" as const : await classifyComment(author, body, env);
   const classifyMs = Date.now() - classifyStart;
 
-  const aiOverride = classification === "spam" ? "spam" as const
-    : classification === "review" ? "pending" as const
-    : null;
-
   // Escape and insert
   const safeAuthor = escHtml(author);
   const safeBody = escHtml(body);
 
-  const status = aiOverride
-    ?? (mode === "paused" ? "pending" : (env.MODERATION === "on" ? "pending" : "approved"));
+  // Status resolution: AI is authoritative when bound, otherwise fall back to MODERATION setting.
+  // When AI_MOD is bound, the AI's verdict maps directly:
+  //   approve → approved, spam → spam, review → pending
+  // When AI_MOD is not bound, MODERATION controls:
+  //   on → pending, off → approved
+  // Paused mode always forces pending regardless.
+  let status: string;
+  if (mode === "paused") {
+    status = "pending";
+  } else if (env.AI_MOD) {
+    // AI is the moderator — its verdict is authoritative
+    status = classification === "spam" ? "spam"
+      : classification === "approve" ? "approved"
+      : "pending"; // "review" or any unexpected value → pending
+  } else {
+    // No AI — fall back to MODERATION setting
+    status = env.MODERATION === "on" ? "pending" : "approved";
+  }
 
   // Generate ID so we can reference it in the mod log
   const commentId = Array.from(crypto.getRandomValues(new Uint8Array(8)))

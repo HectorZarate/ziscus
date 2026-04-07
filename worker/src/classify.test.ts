@@ -49,14 +49,14 @@ describe("classifyComment", () => {
     expect(result).toBe("approve");
   });
 
-  it("returns approve when AI call throws", async () => {
+  it("returns review when AI call throws (fail-closed)", async () => {
     const result = await classifyComment("test", "hello", mockEnv(new Error("model error")));
-    expect(result).toBe("approve");
+    expect(result).toBe("review");
   });
 
-  it("returns approve when AI call times out", async () => {
+  it("returns review when AI call times out (fail-closed)", async () => {
     const result = await classifyComment("test", "hello", slowEnv(5000));
-    expect(result).toBe("approve");
+    expect(result).toBe("review");
   }, 6000);
 
   // --- Response parsing ---

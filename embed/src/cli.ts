@@ -3,9 +3,15 @@ import { Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { runInit } from "./cli/init.js";
 import { runFetch, extractSlugsFromSitemap } from "./cli/fetch.js";
 import { runAiModEnable, runAiModDisable, runAiModStatus } from "./cli/ai-mod.js";
+import { runExport } from "./cli/export.js";
+import { loadEnvFile } from "./cli/load-env.js";
+
+// Auto-load .env from project root (does not override existing vars)
+loadEnvFile(resolve(process.cwd(), ".env"));
 
 const program = new Command()
   .name("ziscus")
@@ -79,6 +85,77 @@ program
       console.error("Provide --slug <slug> or --all --sitemap <url>");
       process.exit(1);
     }
+  });
+
+program
+  .command("export")
+  .description("Export all comments, mod log, bans, and settings to JSON files")
+  .option("--output <dir>", "Output directory", "backups")
+  .option("--format <fmt>", "Output format: json or csv", "json")
+  .option("--endpoint <url>", "Worker endpoint (reads from ziscus.config.json if not set)")
+  .action(async (opts) => {
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) {
+      console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment.");
+      process.exit(1);
+    }
+
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try {
+        const config = JSON.parse(await readFile("ziscus.config.json", "utf-8"));
+        endpoint = config.endpoint;
+      } catch {
+        console.error("Error: No --endpoint and no ziscus.config.json. Run `npx ziscus init` first.");
+        process.exit(1);
+      }
+    }
+
+    await runExport({ endpoint, secret, outputDir: opts.output, format: opts.format });
+    console.log(`✓ Exported to ${opts.output}/`);
+  });
+
+program
+  .command("import")
+  .description("Restore comments from a backup directory")
+  .requiredOption("--from <dir>", "Directory containing backup JSON files")
+  .option("--endpoint <url>", "Worker endpoint")
+  .action(async (opts) => {
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) {
+      console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment.");
+      process.exit(1);
+    }
+
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try {
+        const config = JSON.parse(await readFile("ziscus.config.json", "utf-8"));
+        endpoint = config.endpoint;
+      } catch {
+        console.error("Error: No --endpoint and no ziscus.config.json. Run `npx ziscus init` first.");
+        process.exit(1);
+      }
+    }
+
+    const comments = JSON.parse(await readFile(`${opts.from}/comments.json`, "utf-8"));
+    const bans = JSON.parse(await readFile(`${opts.from}/banned-ips.json`, "utf-8"));
+    let modLog: unknown[] = [];
+    try { modLog = JSON.parse(await readFile(`${opts.from}/mod-log.json`, "utf-8")); } catch { /* optional */ }
+
+    const res = await fetch(`${endpoint}/admin/import`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ comments, bans, modLog }),
+    });
+
+    if (!res.ok) {
+      console.error(`Error: Import failed (${res.status}): ${await res.text()}`);
+      process.exit(1);
+    }
+
+    const result = await res.json() as { comments: number; bans: number; modLog: number };
+    console.log(`✓ Imported ${result.comments} comments, ${result.bans} bans, ${result.modLog} mod log entries`);
   });
 
 const aiMod = program

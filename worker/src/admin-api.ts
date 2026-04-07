@@ -1,6 +1,7 @@
 import type { Env } from "./types.js";
 import { requireAuth } from "./auth.js";
 import { logModAction } from "./mod-log.js";
+import { escHtml } from "./submit.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -128,4 +129,115 @@ export async function handleBulkApprove(request: Request, env: Env): Promise<Res
   ).bind(body.slug).run();
 
   return new Response(JSON.stringify({ ok: true, count: result.meta.changes }), { status: 200, headers: JSON_HEADERS });
+}
+
+/** GET /admin/export — full database dump in one response */
+export async function handleExport(request: Request, env: Env): Promise<Response> {
+  const authErr = requireAuth(request, env);
+  if (authErr) return authErr;
+
+  const [comments, modLog, bans, modeRow] = await Promise.all([
+    env.DB.prepare("SELECT * FROM comments ORDER BY created_at DESC").all(),
+    env.DB.prepare("SELECT * FROM mod_log ORDER BY created_at DESC").all(),
+    env.DB.prepare("SELECT * FROM banned_ips ORDER BY banned_at DESC").all(),
+    env.DB.prepare("SELECT value FROM meta WHERE key = 'comments_mode'").first<{ value: string }>(),
+  ]);
+
+  return new Response(JSON.stringify({
+    comments: comments.results ?? [],
+    modLog: modLog.results ?? [],
+    bans: bans.results ?? [],
+    meta: { mode: modeRow?.value ?? "on" },
+  }), { status: 200, headers: JSON_HEADERS });
+}
+
+const VALID_STATUSES = ["pending", "approved", "rejected", "spam"];
+
+/** POST /admin/import — restore from backup */
+export async function handleImport(request: Request, env: Env): Promise<Response> {
+  const authErr = requireAuth(request, env);
+  if (authErr) return authErr;
+
+  let payload: { comments?: unknown; bans?: unknown; modLog?: unknown };
+  try {
+    payload = await request.json() as typeof payload;
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+
+  const comments = payload.comments;
+  const bans = payload.bans;
+  const modLogEntries = payload.modLog;
+
+  if (comments !== undefined && !Array.isArray(comments)) {
+    return new Response("comments must be an array", { status: 400 });
+  }
+  if (bans !== undefined && !Array.isArray(bans)) {
+    return new Response("bans must be an array", { status: 400 });
+  }
+
+  // Validate and import comments
+  let commentCount = 0;
+  if (Array.isArray(comments)) {
+    for (const c of comments as Record<string, unknown>[]) {
+      if (!c.id || !c.slug || !c.author || !c.body || !c.status) {
+        return new Response("Invalid comment: missing required fields", { status: 400 });
+      }
+      if (!VALID_STATUSES.includes(c.status as string)) {
+        return new Response(`Invalid status: ${c.status}`, { status: 400 });
+      }
+    }
+
+    const batch = (comments as Record<string, unknown>[]).map((c) =>
+      env.DB.prepare(
+        "INSERT OR REPLACE INTO comments (id, slug, author, body, status, ip_hash, created_at, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(
+        c.id, c.slug, escHtml(String(c.author)), escHtml(String(c.body)),
+        c.status, c.ip_hash ?? "", c.created_at ?? new Date().toISOString(), c.approved_at ?? null,
+      ),
+    );
+    for (let i = 0; i < batch.length; i += 100) {
+      await env.DB.batch(batch.slice(i, i + 100));
+    }
+    commentCount = batch.length;
+  }
+
+  // Import bans
+  let banCount = 0;
+  if (Array.isArray(bans)) {
+    const batch = (bans as Record<string, unknown>[]).map((b) =>
+      env.DB.prepare(
+        "INSERT OR REPLACE INTO banned_ips (ip_hash, reason, banned_at) VALUES (?, ?, ?)",
+      ).bind(b.ip_hash, b.reason ?? "", b.banned_at ?? new Date().toISOString()),
+    );
+    for (let i = 0; i < batch.length; i += 100) {
+      await env.DB.batch(batch.slice(i, i + 100));
+    }
+    banCount = batch.length;
+  }
+
+  // Import mod_log
+  let modLogCount = 0;
+  if (Array.isArray(modLogEntries)) {
+    const batch = (modLogEntries as Record<string, unknown>[]).map((m) =>
+      env.DB.prepare(
+        "INSERT OR REPLACE INTO mod_log (id, action, actor, comment_id, slug, reason, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).bind(
+        m.id, m.action, m.actor ?? "admin", m.comment_id ?? null,
+        m.slug ?? null, m.reason ?? "", m.metadata ?? "{}", m.created_at ?? new Date().toISOString(),
+      ),
+    );
+    for (let i = 0; i < batch.length; i += 100) {
+      await env.DB.batch(batch.slice(i, i + 100));
+    }
+    modLogCount = batch.length;
+  }
+
+  await logModAction(env.DB, "import", "admin", {
+    reason: `Imported ${commentCount} comments, ${banCount} bans, ${modLogCount} mod_log entries`,
+  });
+
+  return new Response(JSON.stringify({
+    ok: true, comments: commentCount, bans: banCount, modLog: modLogCount,
+  }), { status: 200, headers: JSON_HEADERS });
 }

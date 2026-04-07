@@ -3,8 +3,26 @@
  * Runs against the deployed Worker's /admin/classify endpoint.
  *
  * Usage:
- *   ZISCUS_ADMIN_SECRET=xxx npx tsx worker/src/classify.eval.ts --endpoint https://ziscus.com
+ *   npx tsx worker/src/classify.eval.ts --endpoint https://ziscus.com
+ *
+ * Reads ZISCUS_ADMIN_SECRET from .env in the project root (or from the environment).
  */
+
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+// Minimal .env loader — does not override existing vars
+try {
+  const envContent = readFileSync(resolve(process.cwd(), ".env"), "utf-8");
+  for (const line of envContent.split("\n")) {
+    const t = line.trim();
+    if (!t || t.startsWith("#")) continue;
+    const eq = t.indexOf("=");
+    if (eq === -1) continue;
+    const k = t.slice(0, eq).trim();
+    if (!process.env[k]) process.env[k] = t.slice(eq + 1).trim();
+  }
+} catch { /* no .env — rely on environment */ }
 
 const EVAL_CASES = [
   // SPAM — must be classified as spam

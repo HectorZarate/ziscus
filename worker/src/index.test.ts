@@ -84,10 +84,11 @@ describe("POST /submit", () => {
     await env.DB.prepare("DELETE FROM banned_ips").run();
   });
 
-  it("inserts a comment and returns 200 with instant feedback", async () => {
+  it("inserts a comment and stores it", async () => {
+    // AI_MOD binding hits real Workers AI in tests — status depends on AI response/timeout.
+    // Deterministic behavior is tested in "AI moderation security model" with mocked AI.
     const res = await submitComment("test-post", "Ada", "Great article!");
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect([200, 303]).toContain(res.status);
 
     const { results } = await env.DB.prepare(
       "SELECT * FROM comments WHERE slug = 'test-post'",
@@ -755,6 +756,180 @@ describe("submit with mode and bans", () => {
 // HTMLRewriter instant feedback
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Structural filter (Layer 0)
+// ---------------------------------------------------------------------------
+
+describe("structural filter", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+  });
+
+  it("rejects comment with null bytes in body", async () => {
+    const res = await submitComment("test", "Alice", "hello\0world");
+    expect(res.status).toBe(400);
+    const text = await res.text();
+    expect(text).toMatch(/null/i);
+  });
+
+  it("rejects comment with null bytes in author", async () => {
+    const res = await submitComment("test", "Ali\0ce", "hello world");
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects comment with excessive invisible unicode", async () => {
+    const body = "hello" + "\u200B".repeat(10) + "world";
+    const res = await submitComment("test", "Alice", body);
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects comment with extreme character repetition", async () => {
+    const res = await submitComment("test", "Alice", "a".repeat(50));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects comment with no word-like content", async () => {
+    const res = await submitComment("test", "Alice", "!@#$%^&*()_+-=");
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects comment with long encoded-looking token", async () => {
+    const body = "see: " + "abcdefgh".repeat(40);
+    const res = await submitComment("test", "Alice", body);
+    expect(res.status).toBe(400);
+  });
+
+  it("does not count structural rejections against rate limit", async () => {
+    // Submit a structurally invalid comment
+    await submitComment("test", "Alice", "hello\0world");
+    // Then submit a valid comment — should still work (not rate limited)
+    const res = await submitComment("test", "Alice", "legitimate comment");
+    expect(res.status).not.toBe(429);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AI moderation (Layer 1) — direct handleSubmit with mock AI_MOD
+// ---------------------------------------------------------------------------
+
+import { handleSubmit } from "./submit.js";
+
+describe("AI moderation security model", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+    await env.DB.prepare("DELETE FROM mod_log").run();
+  });
+
+  function makeRequest(slug: string, author: string, body: string): Request {
+    const form = new FormData();
+    form.set("slug", slug);
+    form.set("author", author);
+    form.set("body", body);
+    return new Request("https://test.example.com/submit", {
+      method: "POST",
+      body: form,
+    });
+  }
+
+  function envWithAI(aiResponse: string | Error, moderation = "off") {
+    const run = aiResponse instanceof Error
+      ? async () => { throw aiResponse; }
+      : async () => ({ response: aiResponse });
+    return {
+      ...env,
+      AI_MOD: { run } as unknown as Ai,
+      MODERATION: moderation,
+    };
+  }
+
+  it("AI spam → status is 'spam' even with MODERATION=off", async () => {
+    const mockEnv = envWithAI("spam", "off");
+    await handleSubmit(makeRequest("test", "Spammer", "Buy SEO services"), mockEnv);
+
+    const row = await env.DB.prepare("SELECT status FROM comments WHERE slug = 'test'")
+      .first<{ status: string }>();
+    expect(row!.status).toBe("spam");
+  });
+
+  it("AI approve → status is 'approved' with MODERATION=off", async () => {
+    const mockEnv = envWithAI("approve", "off");
+    await handleSubmit(makeRequest("test", "Alice", "Great post"), mockEnv);
+
+    const row = await env.DB.prepare("SELECT status FROM comments WHERE slug = 'test'")
+      .first<{ status: string }>();
+    expect(row!.status).toBe("approved");
+  });
+
+  it("AI review → status is 'pending'", async () => {
+    const mockEnv = envWithAI("review", "off");
+    await handleSubmit(makeRequest("test", "Ambiguous", "Hmm not sure"), mockEnv);
+
+    const row = await env.DB.prepare("SELECT status FROM comments WHERE slug = 'test'")
+      .first<{ status: string }>();
+    expect(row!.status).toBe("pending");
+  });
+
+  it("AI failure → status is 'pending' (fail-closed)", async () => {
+    const mockEnv = envWithAI(new Error("model crashed"), "off");
+    await handleSubmit(makeRequest("test", "Alice", "Normal comment"), mockEnv);
+
+    const row = await env.DB.prepare("SELECT status FROM comments WHERE slug = 'test'")
+      .first<{ status: string }>();
+    expect(row!.status).toBe("pending");
+  });
+
+  it("AI approve + MODERATION=on → status is 'approved' (AI is authoritative)", async () => {
+    const mockEnv = envWithAI("approve", "on");
+    await handleSubmit(makeRequest("test", "Alice", "Great post"), mockEnv);
+
+    const row = await env.DB.prepare("SELECT status FROM comments WHERE slug = 'test'")
+      .first<{ status: string }>();
+    expect(row!.status).toBe("approved");
+  });
+
+  it("logs AI classification to mod_log", async () => {
+    const mockEnv = envWithAI("spam", "off");
+    await handleSubmit(makeRequest("test", "Spammer", "Buy stuff"), mockEnv);
+
+    const log = await env.DB.prepare("SELECT action, actor FROM mod_log WHERE action = 'ai_spam'")
+      .first<{ action: string; actor: string }>();
+    expect(log).toBeTruthy();
+    expect(log!.actor).toBe("ai");
+  });
+
+  it("no AI binding + MODERATION=off → status is 'approved' (backwards compat)", async () => {
+    const mockEnv = { ...env, MODERATION: "off" };
+    delete (mockEnv as Record<string, unknown>).AI_MOD;
+    await handleSubmit(makeRequest("test", "Alice", "Hello"), mockEnv);
+
+    const row = await env.DB.prepare("SELECT status FROM comments WHERE slug = 'test'")
+      .first<{ status: string }>();
+    expect(row!.status).toBe("approved");
+  });
+
+  it("no AI binding + MODERATION=on → status is 'pending' (backwards compat)", async () => {
+    const mockEnv = { ...env, MODERATION: "on" };
+    delete (mockEnv as Record<string, unknown>).AI_MOD;
+    await handleSubmit(makeRequest("test", "Alice", "Hello"), mockEnv);
+
+    const row = await env.DB.prepare("SELECT status FROM comments WHERE slug = 'test'")
+      .first<{ status: string }>();
+    expect(row!.status).toBe("pending");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HTMLRewriter instant feedback
+// ---------------------------------------------------------------------------
+
 import { serveWithFreshComments } from "./html-rewriter.js";
 import type { Env as ZiscusEnv } from "./types.js";
 
@@ -877,5 +1052,182 @@ describe("serveWithFreshComments", () => {
     const res = await serveWithFreshComments("test", "/", req, mockEnv);
     const html = await res.text();
     expect(html).toContain("April 6, 2026");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /admin/export
+// ---------------------------------------------------------------------------
+
+describe("GET /admin/export", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM mod_log").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+    await env.DB.prepare("INSERT INTO comments (id, slug, author, body, status) VALUES ('e1', 'test', 'Alice', 'Hello', 'approved')").run();
+    await env.DB.prepare("INSERT INTO mod_log (id, action, actor, comment_id) VALUES ('m1', 'approve', 'admin', 'e1')").run();
+    await env.DB.prepare("INSERT INTO banned_ips (ip_hash, reason) VALUES ('ban1', 'spam')").run();
+  });
+
+  it("returns all data in one response", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/export", {
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json() as Record<string, unknown>;
+    expect(data).toHaveProperty("comments");
+    expect(data).toHaveProperty("modLog");
+    expect(data).toHaveProperty("bans");
+    expect(data).toHaveProperty("meta");
+    expect((data.comments as unknown[]).length).toBe(1);
+    expect((data.modLog as unknown[]).length).toBe(1);
+    expect((data.bans as unknown[]).length).toBe(1);
+  });
+
+  it("requires auth", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/export");
+    expect(res.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /admin/import
+// ---------------------------------------------------------------------------
+
+describe("POST /admin/import", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM mod_log").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+  });
+
+  it("imports comments into D1", async () => {
+    const payload = {
+      comments: [
+        { id: "i1", slug: "test", author: "Bob", body: "Imported", status: "approved", ip_hash: "x", created_at: "2026-04-06T00:00:00Z", approved_at: null },
+      ],
+      bans: [],
+      modLog: [],
+    };
+    const res = await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    expect(res.status).toBe(200);
+    const result = await res.json() as { comments: number };
+    expect(result.comments).toBe(1);
+
+    const row = await env.DB.prepare("SELECT author FROM comments WHERE id = 'i1'").first<{ author: string }>();
+    expect(row!.author).toBe("Bob");
+  });
+
+  it("re-escapes HTML on import (XSS prevention)", async () => {
+    const payload = {
+      comments: [
+        { id: "xss1", slug: "test", author: "<script>alert(1)</script>", body: "normal", status: "approved", ip_hash: "x", created_at: "2026-04-06T00:00:00Z", approved_at: null },
+      ],
+      bans: [],
+      modLog: [],
+    };
+    await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const row = await env.DB.prepare("SELECT author FROM comments WHERE id = 'xss1'").first<{ author: string }>();
+    expect(row!.author).toContain("&lt;script&gt;");
+    expect(row!.author).not.toContain("<script>");
+  });
+
+  it("imports bans", async () => {
+    const payload = {
+      comments: [],
+      bans: [{ ip_hash: "ban1", reason: "spam", banned_at: "2026-04-06T00:00:00Z" }],
+      modLog: [],
+    };
+    const res = await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await res.json() as { bans: number };
+    expect(result.bans).toBe(1);
+  });
+
+  it("imports mod_log entries", async () => {
+    const payload = {
+      comments: [],
+      bans: [],
+      modLog: [{ id: "ml1", action: "approve", actor: "admin", comment_id: "c1", slug: "test", reason: "", metadata: "{}", created_at: "2026-04-06T00:00:00Z" }],
+    };
+    const res = await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await res.json() as { modLog: number };
+    expect(result.modLog).toBe(1);
+  });
+
+  it("uses INSERT OR REPLACE (overwrites existing)", async () => {
+    await env.DB.prepare("INSERT INTO comments (id, slug, author, body, status) VALUES ('dup1', 'test', 'Old', 'old body', 'pending')").run();
+    const payload = {
+      comments: [{ id: "dup1", slug: "test", author: "New", body: "new body", status: "approved", ip_hash: "x", created_at: "2026-04-06T00:00:00Z", approved_at: null }],
+      bans: [],
+      modLog: [],
+    };
+    await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const row = await env.DB.prepare("SELECT author, status FROM comments WHERE id = 'dup1'").first<{ author: string; status: string }>();
+    expect(row!.author).toBe("New");
+    expect(row!.status).toBe("approved");
+  });
+
+  it("requires auth", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      body: JSON.stringify({ comments: [], bans: [], modLog: [] }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 on invalid payload", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ comments: "not an array" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects invalid status values", async () => {
+    const payload = {
+      comments: [{ id: "bad1", slug: "test", author: "X", body: "Y", status: "hacked", ip_hash: "x", created_at: "2026-04-06T00:00:00Z" }],
+      bans: [],
+      modLog: [],
+    };
+    const res = await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("logs import action to mod_log", async () => {
+    const payload = { comments: [], bans: [], modLog: [] };
+    await SELF.fetch("https://test.example.com/admin/import", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const log = await env.DB.prepare("SELECT action FROM mod_log WHERE action = 'import'").first<{ action: string }>();
+    expect(log).toBeTruthy();
   });
 });

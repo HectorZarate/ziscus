@@ -21,6 +21,8 @@ import {
   handleUnbanIp,
   handleListBans,
   handleBulkApprove,
+  handleExport,
+  handleImport,
 } from "./admin-api.js";
 
 export default {
@@ -93,6 +95,8 @@ export default {
       if (path === "/admin/ban" && request.method === "POST") return handleBanIp(request, env);
       if (path === "/admin/bans" && request.method === "GET") return handleListBans(request, env);
       if (path === "/admin/mod-log" && request.method === "GET") return handleGetModLog(request, env);
+      if (path === "/admin/export" && request.method === "GET") return handleExport(request, env);
+      if (path === "/admin/import" && request.method === "POST") return handleImport(request, env);
       if (path === "/admin/bulk/approve" && request.method === "POST") return handleBulkApprove(request, env);
 
       if (path === "/admin/classify" && request.method === "POST") {

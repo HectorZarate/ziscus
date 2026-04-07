@@ -54,6 +54,6 @@ export async function classifyComment(
     return "review";
   } catch (err) {
     console.error(`[ziscus] AI classification failed: ${err instanceof Error ? err.message : err}`);
-    return "approve";
+    return "review";
   }
 }
