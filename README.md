@@ -12,9 +12,11 @@ Inspired by [giscus](https://github.com/giscus/giscus), but different:
 
 - **No client JavaScript** — pure HTML forms, no iframe
 - **Anonymous** — no GitHub account required to comment
-- **Cloudflare D1** — SQLite at the edge, not GitHub Discussions
-- **Full moderation** — approve / reject / spam / ban via API
+- **[Cloudflare D1](https://developers.cloudflare.com/d1/)** — comments stored in your own D1 database, not a third-party service. Up to ~25,000 comments per day and ~10 million stored on the [Cloudflare free tier](https://developers.cloudflare.com/d1/platform/pricing/)
+- **Moderation tooling** — auto-approve, or review first with approve / reject / spam / ban
+- **Optional AI mod** — [Workers AI](https://developers.cloudflare.com/workers-ai/) blocks spam on submission, legitimate comments go through instantly. ~3,000 classifications per day on the free tier
 - **Free** — runs on Cloudflare's free tier
+- **Works with any static site generator** — Hugo, Astro, Eleventy, Jekyll, Next.js and more
 
 Two packages:
 
