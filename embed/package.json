@@ -1,12 +1,12 @@
 {
   "name": "ziscus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zero-JavaScript anonymous comment system — embeddable HTML/CSS generators for static sites",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "ziscus": "./dist/cli.js"
+    "ziscus": "dist/cli.js"
   },
   "exports": {
     ".": {
@@ -33,7 +33,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/HectorZarate/ziscus",
+    "url": "git+https://github.com/HectorZarate/ziscus.git",
     "directory": "embed"
   },
   "homepage": "https://ziscus.com",
