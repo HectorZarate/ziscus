@@ -29,12 +29,12 @@ export function renderComment(comment: Comment): string {
     timeZone: "UTC",
   });
 
-  return `<article class="ziscus-comment">
-        <header class="ziscus-comment-header">
-          <strong class="ziscus-comment-author">${escHtml(comment.author)}</strong>
+  return `<article class="comment">
+        <header class="comment-header">
+          <strong class="comment-author">${escHtml(comment.author)}</strong>
           <time datetime="${escHtml(comment.createdAt)}">${formatted}</time>
         </header>
-        <p class="ziscus-comment-body">${escHtml(comment.body)}</p>
+        <p class="comment-body">${escHtml(comment.body)}</p>
       </article>`;
 }
 
@@ -50,7 +50,7 @@ export function renderCommentList(comments: Comment[]): string {
 
   const items = approved.map((c) => renderComment(c)).join("\n      ");
 
-  return `<section id="ziscus" class="ziscus-section">
+  return `<section id="comments" class="comments-section">
       ${heading}
       ${items}
     </section>`;
@@ -66,15 +66,15 @@ export function renderCommentForm(
     ? `\n      <input type="hidden" name="redirect" value="${escHtml(options.redirectUrl)}">`
     : "";
 
-  return `<form method="POST" action="${escHtml(submitUrl)}" class="ziscus-form">
+  return `<form method="POST" action="${escHtml(submitUrl)}" class="comment-form">
       <input type="hidden" name="slug" value="${escHtml(slug)}">${redirectField}
       <div>
-        <label for="ziscus-author">Name</label>
-        <input type="text" name="author" id="ziscus-author" required>
+        <label for="comment-author">Name</label>
+        <input type="text" name="author" id="comment-author" required>
       </div>
       <div>
-        <label for="ziscus-body">Comment</label>
-        <textarea name="body" id="ziscus-body" rows="4" required></textarea>
+        <label for="comment-body">Comment</label>
+        <textarea name="body" id="comment-body" rows="4" required></textarea>
       </div>
       <button type="submit">Post Comment</button>
     </form>`;
