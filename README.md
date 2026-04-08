@@ -1,6 +1,6 @@
 # ziscus
 
-[![npm version](https://img.shields.io/npm/v/ziscus.png)](https://www.npmjs.com/package/ziscus)
+[![npm version](https://img.shields.io/npm/v/ziscus?style=flat&color=blue)](https://www.npmjs.com/package/ziscus)
 
 Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
