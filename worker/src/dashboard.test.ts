@@ -76,11 +76,12 @@ describe("GET /admin/dashboard", () => {
     expect(html).toContain("post-b");
   });
 
-  it("includes spam catch rate", async () => {
+  it("includes recent spam with full body", async () => {
     const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
     const html = await res.text();
-    // 2 ai_spam out of 4 total ai actions = 50%
-    expect(html).toContain("50%");
+    expect(html).toContain("Recent spam");
+    expect(html).toContain("Spammer");
+    expect(html).toContain("Buy stuff");
   });
 
   it("includes pending queue", async () => {
@@ -88,6 +89,14 @@ describe("GET /admin/dashboard", () => {
     const html = await res.text();
     expect(html).toContain("Pending");
     expect(html).toContain("Review me");
+  });
+
+  it("shows current settings", async () => {
+    const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+    const html = await res.text();
+    expect(html).toContain("Comments");
+    expect(html).toContain("AI Mod");
+    expect(html).toContain("Moderation");
   });
 
   it("also accepts Bearer token auth", async () => {

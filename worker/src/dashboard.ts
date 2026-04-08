@@ -16,15 +16,18 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const [statsResult, topPagesResult, aiActionsResult, pendingResult] = await Promise.all([
+  const [statsResult, topPagesResult, latestPagesResult, pendingResult, spamResult, modeRow] = await Promise.all([
     env.DB.prepare("SELECT status, COUNT(*) as count FROM comments GROUP BY status")
       .all<{ status: string; count: number }>(),
     env.DB.prepare("SELECT slug, COUNT(*) as count FROM comments WHERE status = 'approved' GROUP BY slug ORDER BY count DESC LIMIT 10")
       .all<{ slug: string; count: number }>(),
-    env.DB.prepare("SELECT action, COUNT(*) as count FROM mod_log WHERE actor = 'ai' GROUP BY action")
-      .all<{ action: string; count: number }>(),
+    env.DB.prepare("SELECT slug, COUNT(*) as count, MAX(created_at) as latest FROM comments WHERE status = 'approved' GROUP BY slug ORDER BY latest DESC LIMIT 5")
+      .all<{ slug: string; count: number; latest: string }>(),
     env.DB.prepare("SELECT id, slug, author, body, created_at FROM comments WHERE status = 'pending' ORDER BY created_at DESC LIMIT 20")
       .all<{ id: string; slug: string; author: string; body: string; created_at: string }>(),
+    env.DB.prepare("SELECT id, slug, author, body, created_at FROM comments WHERE status = 'spam' ORDER BY created_at DESC LIMIT 5")
+      .all<{ id: string; slug: string; author: string; body: string; created_at: string }>(),
+    env.DB.prepare("SELECT value FROM meta WHERE key = 'comments_mode'").first<{ value: string }>(),
   ]);
 
   const stats: Record<string, number> = { pending: 0, approved: 0, rejected: 0, spam: 0 };
@@ -33,16 +36,11 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   }
 
   const topPages = topPagesResult.results ?? [];
+  const latestPages = latestPagesResult.results ?? [];
   const pending = pendingResult.results ?? [];
-
-  // Spam catch rate
-  let aiTotal = 0;
-  let aiSpam = 0;
-  for (const row of aiActionsResult.results ?? []) {
-    aiTotal += row.count;
-    if (row.action === "ai_spam") aiSpam = row.count;
-  }
-  const spamRate = aiTotal > 0 ? Math.round((aiSpam / aiTotal) * 100) : 0;
+  const recentSpam = spamResult.results ?? [];
+  const commentsMode = modeRow?.value ?? "on";
+  const aiModEnabled = !!env.AI_MOD;
 
   const token = new URL(request.url).searchParams.get("token") ?? "";
   const tokenParam = token ? `?token=${token}` : "";
@@ -61,33 +59,62 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   .stat { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 1rem; }
   .stat-value { font-size: 2rem; font-weight: 700; color: #fff; }
   .stat-label { font-size: 0.85rem; color: #888; margin-top: 0.25rem; }
+  .settings { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .setting { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 0.75rem 1rem; }
+  .setting-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+  .setting-value { font-size: 0.95rem; color: #fff; margin-top: 0.25rem; }
+  .on { color: #4caf50; }
+  .off { color: #f44336; }
+  .paused { color: #ff9800; }
   table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   th { text-align: left; padding: 0.5rem; border-bottom: 1px solid #333; color: #888; font-weight: normal; }
   td { padding: 0.5rem; border-bottom: 1px solid #1a1a1a; }
-  .pending-body { max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .comment-body { max-width: 500px; }
+  .spam-body { max-width: 500px; color: #888; white-space: pre-wrap; word-break: break-word; }
   a { color: #4da6ff; text-decoration: none; }
   a:hover { text-decoration: underline; }
   .actions a { margin-right: 0.75rem; font-size: 0.85rem; }
   .approve { color: #4caf50; }
-  .spam { color: #f44336; }
+  .spam-action { color: #f44336; }
   .reject { color: #ff9800; }
 </style>
 </head>
 <body>
 <h1>ziscus dashboard</h1>
 
+<div class="settings">
+  <div class="setting">
+    <div class="setting-label">Comments</div>
+    <div class="setting-value ${commentsMode}">${commentsMode}</div>
+  </div>
+  <div class="setting">
+    <div class="setting-label">AI Mod</div>
+    <div class="setting-value ${aiModEnabled ? "on" : "off"}">${aiModEnabled ? "on" : "off"}</div>
+  </div>
+  <div class="setting">
+    <div class="setting-label">Moderation</div>
+    <div class="setting-value">${esc(env.MODERATION ?? "off")}</div>
+  </div>
+</div>
+
 <div class="stats">
   <div class="stat"><div class="stat-value">${stats.approved}</div><div class="stat-label">Approved</div></div>
   <div class="stat"><div class="stat-value">${stats.pending}</div><div class="stat-label">Pending</div></div>
-  <div class="stat"><div class="stat-value">${stats.spam}</div><div class="stat-label">Spam</div></div>
-  <div class="stat"><div class="stat-value">${spamRate}%</div><div class="stat-label">AI spam catch rate</div></div>
+  <div class="stat"><div class="stat-value">${stats.spam}</div><div class="stat-label">Spam blocked</div></div>
 </div>
 
 <h2>Top pages</h2>
 <table>
   <tr><th>Page</th><th>Comments</th></tr>
-  ${topPages.map((p) => `<tr><td>${esc(p.slug)}</td><td>${p.count}</td></tr>`).join("\n  ")}
+  ${topPages.map((p) => `<tr><td><a href="/comments/${esc(p.slug)}">${esc(p.slug)}</a></td><td>${p.count}</td></tr>`).join("\n  ")}
   ${topPages.length === 0 ? "<tr><td colspan=2>No comments yet</td></tr>" : ""}
+</table>
+
+<h2>Latest activity</h2>
+<table>
+  <tr><th>Page</th><th>Comments</th><th>Last comment</th></tr>
+  ${latestPages.map((p: { slug: string; count: number; latest: string }) => `<tr><td><a href="/comments/${esc(p.slug)}">${esc(p.slug)}</a></td><td>${p.count}</td><td>${p.latest.slice(0, 10)}</td></tr>`).join("\n  ")}
+  ${latestPages.length === 0 ? "<tr><td colspan=3>No comments yet</td></tr>" : ""}
 </table>
 
 <h2>Pending queue (${pending.length})</h2>
@@ -95,16 +122,27 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   <tr><th>Author</th><th>Comment</th><th>Page</th><th>Date</th><th>Actions</th></tr>
   ${pending.map((c) => `<tr>
     <td>${esc(c.author)}</td>
-    <td class="pending-body">${esc(c.body)}</td>
+    <td class="comment-body">${esc(c.body)}</td>
     <td>${esc(c.slug)}</td>
     <td>${c.created_at.slice(0, 10)}</td>
     <td class="actions">
       <a class="approve" href="/approve/${c.id}${tokenParam}" onclick="return fetch('/approve/${c.id}',{method:'POST',headers:{'Authorization':'Bearer ${token}'}}).then(()=>location.reload())">approve</a>
-      <a class="spam" href="/spam/${c.id}${tokenParam}" onclick="return fetch('/spam/${c.id}',{method:'POST',headers:{'Authorization':'Bearer ${token}'}}).then(()=>location.reload())">spam</a>
+      <a class="spam-action" href="/spam/${c.id}${tokenParam}" onclick="return fetch('/spam/${c.id}',{method:'POST',headers:{'Authorization':'Bearer ${token}'}}).then(()=>location.reload())">spam</a>
       <a class="reject" href="/reject/${c.id}${tokenParam}" onclick="return fetch('/reject/${c.id}',{method:'POST',headers:{'Authorization':'Bearer ${token}'}}).then(()=>location.reload())">reject</a>
     </td>
   </tr>`).join("\n  ")}
   ${pending.length === 0 ? "<tr><td colspan=5>No pending comments</td></tr>" : ""}
+</table>
+
+<h2>Recent spam (${recentSpam.length})</h2>
+<table>
+  <tr><th>Author</th><th>Content</th><th>Date</th></tr>
+  ${recentSpam.map((c) => `<tr>
+    <td>${esc(c.author)}</td>
+    <td class="spam-body">${esc(c.body)}</td>
+    <td>${c.created_at.slice(0, 10)}</td>
+  </tr>`).join("\n  ")}
+  ${recentSpam.length === 0 ? "<tr><td colspan=3>No spam caught yet</td></tr>" : ""}
 </table>
 
 </body>
