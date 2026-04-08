@@ -1,6 +1,6 @@
 {
   "name": "ziscus",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Zero-JavaScript anonymous comment system — embeddable HTML/CSS generators for static sites",
   "type": "module",
   "main": "dist/index.js",

@@ -9,6 +9,7 @@ import { runFetch, extractSlugsFromSitemap } from "./cli/fetch.js";
 import { runAiModEnable, runAiModDisable, runAiModStatus } from "./cli/ai-mod.js";
 import { runExport } from "./cli/export.js";
 import { runModLog } from "./cli/mod-log.js";
+import { runMigrate } from "./cli/migrate.js";
 import { loadEnvFile } from "./cli/load-env.js";
 import {
   checkWranglerVersion,
@@ -26,7 +27,7 @@ loadEnvFile(resolve(process.cwd(), ".env"));
 const program = new Command()
   .name("ziscus")
   .description("Zero-JavaScript anonymous comment system")
-  .version("0.3.0"); // Keep in sync with package.json version
+  .version("0.4.0"); // Keep in sync with package.json version
 
 program
   .command("init")
@@ -169,6 +170,67 @@ program
     console.log(`  AI mod:  npx ziscus ai-mod enable`);
     console.log(`\nBack up your admin secret somewhere safe.`);
     console.log(`Cloudflare secrets are write-only — you cannot retrieve them later.`);
+  });
+
+program
+  .command("migrate")
+  .description("Import comments from another system")
+  .requiredOption("--from <source>", "Source system (giscus)")
+  .requiredOption("--repo <owner/repo>", "GitHub repository (e.g. user/blog)")
+  .option("--token <token>", "GitHub PAT (reads from GITHUB_TOKEN env if not set)")
+  .option("--endpoint <url>", "Worker endpoint (reads from ziscus.config.json if not set)")
+  .action(async (opts) => {
+    if (opts.from !== "giscus") {
+      console.error(`Unsupported source: "${opts.from}". Currently supported: giscus`);
+      process.exit(1);
+    }
+
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) {
+      console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment.");
+      process.exit(1);
+    }
+
+    const ghToken = opts.token || process.env.GITHUB_TOKEN;
+    if (!ghToken) {
+      console.error("Error: Provide --token or set GITHUB_TOKEN in .env or environment.");
+      console.error("Create a fine-grained PAT at https://github.com/settings/personal-access-tokens/new");
+      console.error("  Repository access: select your repo");
+      console.error("  Permissions: Discussions → Read");
+      process.exit(1);
+    }
+
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try {
+        const config = JSON.parse(await readFile("ziscus.config.json", "utf-8"));
+        endpoint = config.endpoint;
+      } catch {
+        console.error("Error: No --endpoint and no ziscus.config.json. Run `npx ziscus init` first.");
+        process.exit(1);
+      }
+    }
+
+    const [owner, repo] = opts.repo.split("/");
+    if (!owner || !repo) {
+      console.error("Error: --repo must be in owner/repo format (e.g. user/blog)");
+      process.exit(1);
+    }
+
+    console.log(`Migrating comments from giscus (${opts.repo})...\n`);
+
+    try {
+      const count = await runMigrate({ owner, repo, token: ghToken, endpoint, secret });
+      if (count === 0) {
+        console.log("No comments found in GitHub Discussions.");
+      } else {
+        console.log(`✓ Imported ${count} comments from giscus`);
+        console.log(`\nRun \`npx ziscus mod-log\` to see the import in the moderation log.`);
+      }
+    } catch (err) {
+      console.error(`Migration failed: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
   });
 
 program
