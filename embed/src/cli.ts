@@ -343,6 +343,39 @@ program
   });
 
 program
+  .command("dashboard")
+  .description("Open the admin dashboard in your browser")
+  .option("--endpoint <url>", "Worker endpoint")
+  .action(async (opts) => {
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) {
+      console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment.");
+      process.exit(1);
+    }
+
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try {
+        const config = JSON.parse(await readFile("ziscus.config.json", "utf-8"));
+        endpoint = config.endpoint;
+      } catch {
+        console.error("Error: No --endpoint and no ziscus.config.json. Run `npx ziscus init` first.");
+        process.exit(1);
+      }
+    }
+
+    const url = `${endpoint.replace(/\/$/, "")}/admin/dashboard?token=${secret}`;
+    console.log(`Opening dashboard: ${endpoint}/admin/dashboard`);
+    const { execSync } = await import("node:child_process");
+    try {
+      execSync(`open "${url}"`, { stdio: "ignore" });
+    } catch {
+      // Fallback for non-macOS
+      console.log(`Open this URL in your browser:\n${url}`);
+    }
+  });
+
+program
   .command("comments")
   .description("List comments with full content")
   .option("--status <status>", "Filter by status (approved, pending, spam, rejected)")
