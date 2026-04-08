@@ -1,7 +1,5 @@
 # ziscus
 
-[![npm](https://img.shields.io/npm/v/ziscus?logo=npm&label=npm)](https://www.npmjs.com/package/ziscus)
-
 Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
 A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1/), your SSG bakes them into HTML at build time. Moderation via curl.
