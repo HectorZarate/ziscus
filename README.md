@@ -8,6 +8,8 @@ A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1
 
 **Live demo:** [ziscus.com](https://ziscus.com)
 
+![ziscus landing page](site/_site/images/screenshot-landing.png)
+
 Inspired by [giscus](https://github.com/giscus/giscus), but different:
 
 - **No client JavaScript** — pure HTML forms, no iframe
@@ -78,12 +80,13 @@ const css = ziscusStyles();
 ### 3. Moderate
 
 ```bash
-curl -H "Authorization: Bearer $SECRET" https://worker.dev/admin/comments?status=pending
-curl -X POST -H "Authorization: Bearer $SECRET" https://worker.dev/approve/<id>
-curl -X POST -H "Authorization: Bearer $SECRET" https://worker.dev/reject/<id>
-curl -X POST -H "Authorization: Bearer $SECRET" https://worker.dev/spam/<id>
-curl -X DELETE -H "Authorization: Bearer $SECRET" https://worker.dev/comments/<id>
+npx ziscus dashboard                # open admin dashboard in browser
+npx ziscus comments --status pending  # view pending queue
+npx ziscus comments --status spam     # view caught spam
+npx ziscus mod-log                    # moderation audit trail
 ```
+
+![ziscus admin dashboard](site/_site/images/screenshot-dashboard.png)
 
 Three global modes (`POST /admin/mode`):
 
