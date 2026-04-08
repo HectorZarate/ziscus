@@ -106,14 +106,14 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 <h2>Top pages</h2>
 <table>
   <tr><th>Page</th><th>Comments</th></tr>
-  ${topPages.map((p) => `<tr><td><a href="/${esc(p.slug)}">${esc(p.slug)}</a></td><td>${p.count}</td></tr>`).join("\n  ")}
+  ${topPages.map((p) => `<tr><td><a href="${slugUrl(p.slug)}">${esc(p.slug)}</a></td><td>${p.count}</td></tr>`).join("\n  ")}
   ${topPages.length === 0 ? "<tr><td colspan=2>No comments yet</td></tr>" : ""}
 </table>
 
 <h2>Latest activity</h2>
 <table>
   <tr><th>Page</th><th>Comments</th><th>Last comment</th></tr>
-  ${latestPages.map((p: { slug: string; count: number; latest: string }) => `<tr><td><a href="/${esc(p.slug)}">${esc(p.slug)}</a></td><td>${p.count}</td><td>${p.latest.slice(0, 10)}</td></tr>`).join("\n  ")}
+  ${latestPages.map((p: { slug: string; count: number; latest: string }) => `<tr><td><a href="${slugUrl(p.slug)}">${esc(p.slug)}</a></td><td>${p.count}</td><td>${p.latest.slice(0, 10)}</td></tr>`).join("\n  ")}
   ${latestPages.length === 0 ? "<tr><td colspan=3>No comments yet</td></tr>" : ""}
 </table>
 
@@ -156,4 +156,8 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function slugUrl(slug: string): string {
+  return slug === "landing" ? "/" : `/${slug}`;
 }
