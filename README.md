@@ -10,13 +10,30 @@ A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1
 
 Inspired by [giscus](https://github.com/giscus/giscus), but different:
 
-- **No client JavaScript** — pure HTML forms, no iframe
-- **Anonymous** — no GitHub account required to comment
-- **[Cloudflare D1](https://developers.cloudflare.com/d1/)** — comments stored in your own D1 database, not a third-party service. Up to ~25,000 comments per day and ~10 million stored on the [Cloudflare free tier](https://developers.cloudflare.com/d1/platform/pricing/)
-- **Moderation tooling** — auto-approve, or review first with approve / reject / spam / ban
-- **Optional AI mod** — [Workers AI](https://developers.cloudflare.com/workers-ai/) blocks spam on submission, legitimate comments go through instantly. ~3,000 classifications per day on the free tier
-- **Free** — runs on Cloudflare's free tier
-- **Works with any static site generator** — Hugo, Astro, Eleventy, Jekyll, Next.js and more
+- **No client JavaScript**
+  - Pure HTML forms, no iframe
+- **Performance**
+  - Zero JavaScript to load, no bloat to tank your Lighthouse scores
+  - **Read:** As fast as your CDN can serve static content (<100ms usually and >30k req/s on Cloudflare's CDN)
+  - **Write:** 50 comments per second, up to 25k comments per day
+- **Anonymous**
+  - No GitHub account required to comment
+- **[Cloudflare D1](https://developers.cloudflare.com/d1/)**
+  - Comments stored in your own D1 database, not a third-party service
+  - Up to ~25,000 comments per day and ~10 million stored on the [Cloudflare free tier](https://developers.cloudflare.com/d1/platform/pricing/)
+- **Moderation tooling**
+  - Auto-approve, or review first with approve / reject / spam / ban
+- **Optional AI mod**
+  - [Workers AI](https://developers.cloudflare.com/workers-ai/) blocks spam on submission, legitimate comments go through instantly
+  - ~3,000 classifications per day on the free tier
+- **Admin dashboard**
+  - Server-rendered HTML, no JavaScript required
+  - Comment stats, pending queue, recent spam, top pages, latest activity
+  - One-click approve, reject, or mark as spam
+- **Free**
+  - Runs on Cloudflare's free tier
+- **Works with any static site generator**
+  - Hugo, Astro, Eleventy, Jekyll, Next.js and more
 
 Two packages:
 
