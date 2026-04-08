@@ -1,7 +1,6 @@
 import type { Env } from "./types.js";
 import { checkRateLimit } from "./rate-limit.js";
 import { triggerRebuild } from "./debounce.js";
-import { serveWithFreshComments } from "./html-rewriter.js";
 import { classifyComment } from "./classify.js";
 import { logModAction } from "./mod-log.js";
 import { structuralFilter } from "./structural-filter.js";
@@ -133,39 +132,43 @@ export async function handleSubmit(
     status = env.MODERATION === "on" ? "pending" : "approved";
   }
 
+  // Content-based dedup: skip insert if same (slug, ip_hash, body) exists within 5 minutes
+  const existing = await env.DB.prepare(
+    "SELECT id FROM comments WHERE slug = ? AND ip_hash = ? AND body = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-5 minutes')",
+  ).bind(slug, ipHash, safeBody).first();
+
   // Generate ID so we can reference it in the mod log
   const commentId = Array.from(crypto.getRandomValues(new Uint8Array(8)))
     .map((b) => b.toString(16).padStart(2, "0")).join("");
 
-  await env.DB.prepare(
-    "INSERT INTO comments (id, slug, author, body, status, ip_hash) VALUES (?, ?, ?, ?, ?, ?)",
-  )
-    .bind(commentId, slug, safeAuthor, safeBody, status, ipHash)
-    .run();
+  if (!existing) {
+    await env.DB.prepare(
+      "INSERT INTO comments (id, slug, author, body, status, ip_hash) VALUES (?, ?, ?, ?, ?, ?)",
+    )
+      .bind(commentId, slug, safeAuthor, safeBody, status, ipHash)
+      .run();
 
-  // Log AI decision
-  if (env.AI_MOD && mode !== "paused") {
-    await logModAction(env.DB, `ai_${classification}`, "ai", {
-      commentId, slug,
-      metadata: { model: "@cf/meta/llama-3.1-8b-instruct", latency_ms: classifyMs },
-    });
-  }
+    // Log AI decision
+    if (env.AI_MOD && mode !== "paused") {
+      await logModAction(env.DB, `ai_${classification}`, "ai", {
+        commentId, slug,
+        metadata: { model: "@cf/meta/llama-3.1-8b-instruct", latency_ms: classifyMs },
+      });
+    }
 
-  // Trigger debounced rebuild if auto-approved
-  if (status === "approved") {
-    await triggerRebuild(env.DB, env, slug);
+    // Trigger debounced rebuild if auto-approved
+    if (status === "approved") {
+      await triggerRebuild(env.DB, env, slug);
+    }
   }
 
   const destination = redirectUrl || request.headers.get("Referer") || "/";
 
-  // Auto-approved: return the page with fresh comments injected via HTMLRewriter.
-  // The commenter sees their comment instantly — no redirect, stays on the same site.
-  if ((status === "approved" || status === "spam") && env.ASSETS) {
-    return serveWithFreshComments(slug, destination, request, env);
+  // PRG: always redirect with 303. Set a flash cookie so the GET handler
+  // serves fresh comments via HTMLRewriter (commenter sees their comment instantly).
+  const headers = new Headers({ Location: destination });
+  if (status === "approved" || status === "spam") {
+    headers.set("Set-Cookie", `ziscus_posted=${slug}; Max-Age=120; Path=/; SameSite=Lax`);
   }
-
-  return new Response(null, {
-    status: 303,
-    headers: { Location: destination },
-  });
+  return new Response(null, { status: 303, headers });
 }

@@ -116,6 +116,19 @@ export default {
       if (unbanMatch && request.method === "DELETE") return handleUnbanIp(unbanMatch[1]!, request, env);
     }
 
+    // Flash cookie: after PRG redirect, serve fresh comments via HTMLRewriter
+    // so the commenter sees their comment instantly
+    const cookies = request.headers.get("Cookie") ?? "";
+    const flashMatch = cookies.match(/ziscus_posted=([a-z0-9-]+)/);
+    if (flashMatch && env.ASSETS && request.method === "GET") {
+      const slug = flashMatch[1]!;
+      const original = await serveWithFreshComments(slug, url.pathname, request, env);
+      // Build new response with mutable headers to clear the flash cookie
+      const headers = new Headers(original.headers);
+      headers.set("Set-Cookie", "ziscus_posted=; Max-Age=0; Path=/; SameSite=Lax");
+      return new Response(original.body, { status: original.status, headers });
+    }
+
     // No API route matched — serve static assets (landing site)
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response("Not found", { status: 404 });
