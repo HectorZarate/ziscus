@@ -146,7 +146,47 @@ export default {
     }
 
     // No API route matched — serve static assets (landing site)
-    if (env.ASSETS) return env.ASSETS.fetch(request);
+    if (env.ASSETS) {
+      const assetRes = await env.ASSETS.fetch(request);
+      // If this is an HTML page, check for paused slugs and hide comment forms
+      const ct = assetRes.headers.get("Content-Type") ?? "";
+      if (ct.includes("text/html") && request.method === "GET") {
+        const { results } = await env.DB.prepare(
+          "SELECT key FROM meta WHERE key LIKE 'slug_paused:%'",
+        ).all<{ key: string }>();
+        if (results && results.length > 0) {
+          const pausedSlugs = new Set(results.map((r) => r.key.replace("slug_paused:", "")));
+          let formIsPaused = false;
+          const pausedMsg = '<p style="color: var(--color-muted, #888); font-style: italic; margin: 1rem 0;">Comments are paused on this page.</p>';
+          const rewritten = new HTMLRewriter()
+            .on(".comment-form input[name='slug']", {
+              element(el) {
+                const val = el.getAttribute("value") ?? "";
+                formIsPaused = pausedSlugs.has(val);
+                if (formIsPaused) el.remove();
+              },
+            })
+            .on(".comment-form div, .comment-form button", {
+              element(el) {
+                if (formIsPaused) el.remove();
+              },
+            })
+            .on(".comment-form", {
+              element(el) {
+                el.onEndTag((end) => {
+                  if (formIsPaused) end.before(pausedMsg, { html: true });
+                });
+              },
+            })
+            .transform(assetRes);
+          return new Response(rewritten.body, {
+            status: assetRes.status,
+            headers: assetRes.headers,
+          });
+        }
+      }
+      return assetRes;
+    }
     return new Response("Not found", { status: 404 });
   },
 };
