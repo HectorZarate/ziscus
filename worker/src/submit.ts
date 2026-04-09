@@ -53,6 +53,15 @@ export async function handleSubmit(
   const body = formData.get("body")?.toString().trim() ?? "";
   const redirectUrl = formData.get("redirect")?.toString().trim() ?? "";
 
+  // Per-slug pause check
+  if (slug) {
+    const slugPaused = await env.DB.prepare("SELECT 1 FROM meta WHERE key = ?").bind(`slug_paused:${slug}`).first();
+    if (slugPaused) {
+      const destination = redirectUrl || request.headers.get("Referer") || "/";
+      return new Response(null, { status: 303, headers: { Location: destination } });
+    }
+  }
+
   // CSRF protection: reject if Origin doesn't match any allowed origin
   const origin = request.headers.get("Origin") ?? request.headers.get("Referer") ?? "";
   const allowedHosts = (env.ALLOWED_ORIGINS ?? "").split(",").map((h) => h.trim()).filter(Boolean);

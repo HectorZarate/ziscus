@@ -114,6 +114,22 @@ export default {
 
       const unbanMatch = path.match(/^\/admin\/ban\/([a-z0-9]+)\/?$/);
       if (unbanMatch && request.method === "DELETE") return handleUnbanIp(unbanMatch[1]!, request, env);
+
+      // Per-slug pause: POST to pause, DELETE to reopen
+      const pauseMatch = path.match(/^\/admin\/pause\/([a-z0-9-]+)\/?$/);
+      if (pauseMatch) {
+        const authErr = requireAuth(request, env);
+        if (authErr) return authErr;
+        const pauseSlug = pauseMatch[1]!;
+        if (request.method === "POST") {
+          await env.DB.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '1')").bind(`slug_paused:${pauseSlug}`).run();
+          return new Response(JSON.stringify({ ok: true, slug: pauseSlug, paused: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (request.method === "DELETE") {
+          await env.DB.prepare("DELETE FROM meta WHERE key = ?").bind(`slug_paused:${pauseSlug}`).run();
+          return new Response(JSON.stringify({ ok: true, slug: pauseSlug, paused: false }), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+      }
     }
 
     // Flash cookie: after PRG redirect, serve fresh comments via HTMLRewriter

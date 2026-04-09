@@ -252,13 +252,24 @@ describe("PRG pattern", () => {
     await env.DB.prepare("DELETE FROM banned_ips").run();
   });
 
+  // Use handleSubmit with no AI to avoid non-deterministic AI timeout
+  function makeReq(slug: string, author: string, body: string): Request {
+    const form = new FormData();
+    form.set("slug", slug);
+    form.set("author", author);
+    form.set("body", body);
+    return new Request("https://test.example.com/submit", { method: "POST", body: form });
+  }
+  const prgEnv = { ...env, MODERATION: "off" } as typeof env;
+  delete (prgEnv as Record<string, unknown>).AI_MOD;
+
   it("returns 303 redirect for approved comments (not 200)", async () => {
-    const res = await submitComment("test", "Ada", "Great article!");
+    const res = await handleSubmit(makeReq("test", "Ada", "Great article!"), prgEnv);
     expect(res.status).toBe(303);
   });
 
   it("sets ziscus_posted cookie on approved comment", async () => {
-    const res = await submitComment("test", "Ada", "Great article!");
+    const res = await handleSubmit(makeReq("test", "Ada", "Great article!"), prgEnv);
     const cookie = res.headers.get("Set-Cookie") ?? "";
     expect(cookie).toContain("ziscus_posted=test");
   });
@@ -809,6 +820,68 @@ describe("POST/GET /admin/mode", () => {
     });
     const { mode } = await res.json() as { mode: string };
     expect(mode).toBe("on");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-slug pause
+// ---------------------------------------------------------------------------
+
+describe("per-slug pause", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+  });
+
+  it("POST /admin/pause/:slug sets slug as paused", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/pause/my-post", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.status).toBe(200);
+
+    const row = await env.DB.prepare("SELECT value FROM meta WHERE key = 'slug_paused:my-post'").first();
+    expect(row).toBeTruthy();
+  });
+
+  it("DELETE /admin/pause/:slug reopens comments", async () => {
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('slug_paused:my-post', '1')").run();
+    const res = await SELF.fetch("https://test.example.com/admin/pause/my-post", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.status).toBe(200);
+
+    const row = await env.DB.prepare("SELECT value FROM meta WHERE key = 'slug_paused:my-post'").first();
+    expect(row).toBeNull();
+  });
+
+  it("rejects submissions to paused slug", async () => {
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('slug_paused:test', '1')").run();
+    const res = await submitComment("test", "Ada", "Should be rejected");
+    // Should redirect back, not insert
+    expect([303, 403]).toContain(res.status);
+
+    const { results } = await env.DB.prepare("SELECT * FROM comments WHERE slug = 'test'").all();
+    expect(results).toHaveLength(0);
+  });
+
+  it("existing comments on paused slug are still served", async () => {
+    await env.DB.prepare("INSERT INTO comments (id, slug, author, body, status) VALUES ('p1', 'test', 'Ada', 'Old comment', 'approved')").run();
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('slug_paused:test', '1')").run();
+
+    const res = await SELF.fetch("https://test.example.com/comments/test");
+    const comments = (await res.json()) as Array<Record<string, unknown>>;
+    expect(comments).toHaveLength(1);
+    expect(comments[0]!.author).toBe("Ada");
+  });
+
+  it("requires auth to pause", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/pause/my-post", { method: "POST" });
+    expect(res.status).toBe(401);
   });
 });
 

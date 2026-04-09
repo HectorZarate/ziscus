@@ -420,6 +420,48 @@ program
   });
 
 program
+  .command("pause <slug>")
+  .description("Pause comments on a specific page (existing comments stay visible)")
+  .option("--endpoint <url>", "Worker endpoint")
+  .action(async (slug: string, opts: { endpoint?: string }) => {
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) { console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment."); process.exit(1); }
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try { endpoint = JSON.parse(await readFile("ziscus.config.json", "utf-8")).endpoint; }
+      catch { console.error("Error: No --endpoint and no ziscus.config.json."); process.exit(1); }
+    }
+    const res = await fetch(`${endpoint}/admin/pause/${slug}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    if (!res.ok) { console.error(`Failed (${res.status})`); process.exit(1); }
+    console.log(`✓ Comments paused on "${slug}". Existing comments are still visible.`);
+    console.log(`  New submissions will be silently rejected.`);
+    console.log(`  To reopen: npx ziscus open ${slug}`);
+  });
+
+program
+  .command("open <slug>")
+  .description("Reopen comments on a paused page")
+  .option("--endpoint <url>", "Worker endpoint")
+  .action(async (slug: string, opts: { endpoint?: string }) => {
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) { console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment."); process.exit(1); }
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try { endpoint = JSON.parse(await readFile("ziscus.config.json", "utf-8")).endpoint; }
+      catch { console.error("Error: No --endpoint and no ziscus.config.json."); process.exit(1); }
+    }
+    const res = await fetch(`${endpoint}/admin/pause/${slug}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    if (!res.ok) { console.error(`Failed (${res.status})`); process.exit(1); }
+    console.log(`✓ Comments reopened on "${slug}".`);
+  });
+
+program
   .command("mod-log")
   .description("View the moderation log")
   .option("--action <action>", "Filter by action (ai_spam, ai_approve, approve, reject, spam, delete)")
