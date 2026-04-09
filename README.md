@@ -2,7 +2,7 @@
 
 Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
-A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1/), your SSG bakes them into HTML at build time. Moderation via curl.
+A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1/), your SSG bakes them into HTML at build time. Moderation via CLI and admin dashboard.
 
 **Live demo:** [ziscus.com](https://ziscus.com)
 
@@ -45,11 +45,13 @@ Two packages:
 ### CLI (fastest way)
 
 ```bash
-npx ziscus init    # scaffold config and deploy the Worker
-npx ziscus fetch   # pull comments and render static HTML
+npx ziscus deploy              # deploy Worker, create D1, set secrets — one command
+npx ziscus init                # scaffold SSG templates (Hugo, Astro, Eleventy, Jekyll, Next.js)
+npx ziscus ai-mod enable       # optional: turn on AI spam filtering
+npx ziscus dashboard           # open admin dashboard in browser
 ```
 
-That's it. The CLI handles Worker deployment, D1 setup, and code generation. Read on if you want to understand each piece or set things up manually.
+That's it. `deploy` handles Worker deployment, D1 setup, secret generation, and SSG scaffolding. Read on if you want to understand each piece or set things up manually.
 
 ### 1. Deploy the Worker
 
