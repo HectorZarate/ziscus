@@ -93,7 +93,7 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   </div>
   <div class="setting">
     <div class="setting-label">Moderation</div>
-    <div class="setting-value">${esc(env.MODERATION ?? "off")}</div>
+    <div class="setting-value">${aiModEnabled ? "AI decides (fail-closed)" : esc(env.MODERATION === "on" ? "manual review" : "auto-approve")}</div>
   </div>
 </div>
 
