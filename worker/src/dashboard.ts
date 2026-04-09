@@ -50,7 +50,7 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ziscus dashboard</title>
+<title>Admin Dashboard</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 2rem 1rem; background: #0d0d0d; color: #e0e0e0; }
   h1 { font-size: 1.4rem; margin-bottom: 1.5rem; color: #fff; }
@@ -80,7 +80,7 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 </style>
 </head>
 <body>
-<h1>ziscus dashboard</h1>
+<h1>Admin Dashboard</h1>
 
 <div class="settings">
   <div class="setting">
