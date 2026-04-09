@@ -2,31 +2,31 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ziscus.com/</loc>
-    <lastmod>2026-04-08</lastmod>
+    <lastmod>2026-04-09</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://ziscus.com/landing.html</loc>
-    <lastmod>2026-04-08</lastmod>
+    <lastmod>2026-04-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ziscus.com/compare.html</loc>
-    <lastmod>2026-04-08</lastmod>
+    <lastmod>2026-04-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ziscus.com/quickstart-hugo.html</loc>
-    <lastmod>2026-04-08</lastmod>
+    <lastmod>2026-04-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://ziscus.com/quickstart-astro.html</loc>
-    <lastmod>2026-04-08</lastmod>
+    <lastmod>2026-04-09</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
