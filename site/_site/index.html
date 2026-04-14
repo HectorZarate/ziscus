@@ -171,6 +171,37 @@ pre code {
   padding: 0;
 }
 
+/* === Tables === */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+th {
+  font-weight: 600;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 480px) {
+  table { font-size: 0.8rem; }
+  th, td { padding: 0.4rem 0.5rem; }
+}
+
 /* === Shiki code blocks — override pre defaults with shiki vars === */
 pre.shiki {
   background: var(--shiki-background) !important;
@@ -379,6 +410,47 @@ footer {
   font-size: 0.75rem;
 }
 
+/* === Post thumbnails on index === */
+.post-thumb {
+  display: block;
+  margin-bottom: 0.75rem;
+  line-height: 0;
+}
+
+.post-thumb img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+}
+
+/* === Post navigation === */
+.post-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.9rem;
+}
+
+.post-nav a {
+  color: var(--color-link);
+  text-decoration: none;
+  max-width: 45%;
+}
+
+.post-nav a:hover {
+  text-decoration: underline;
+}
+
+.post-nav-next {
+  text-align: right;
+  margin-left: auto;
+}
+
 /* === Selection — intentional === */
 ::selection {
   background: var(--color-link);
@@ -523,7 +595,7 @@ nav a, button, .tag {
 <p>Leave a comment below. It will appear instantly for you and appear on the site live in ~60 seconds.</p>
 </div>
       <section id="comments" class="comments-section">
-      <h2>3 Comments</h2>
+      <h2>4 Comments</h2>
       <article class="comment">
         <header class="comment-header">
           <strong class="comment-author">hdz</strong>
@@ -544,6 +616,13 @@ nav a, button, .tag {
           <time datetime="2026-04-09T02:38:29Z">April 9, 2026</time>
         </header>
         <p class="comment-body">Hrllo</p>
+      </article>
+      <article class="comment">
+        <header class="comment-header">
+          <strong class="comment-author">klkl</strong>
+          <time datetime="2026-04-14T02:58:12Z">April 14, 2026</time>
+        </header>
+        <p class="comment-body">koolo</p>
       </article>
     </section>
     <form method="POST" action="https://ziscus.com/submit" class="comment-form">
