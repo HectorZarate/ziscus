@@ -68,6 +68,7 @@ async function submitComment(
     method: "POST",
     body: form,
     redirect: "manual",
+    headers: { Origin: "https://ziscus.com" },
   });
 }
 
@@ -105,6 +106,7 @@ describe("POST /submit", () => {
     const res = await SELF.fetch("https://test.example.com/submit", {
       method: "POST",
       body: form,
+      headers: { Origin: "https://ziscus.com" },
     });
     expect(res.status).toBe(400);
   });
@@ -116,6 +118,7 @@ describe("POST /submit", () => {
     const res = await SELF.fetch("https://test.example.com/submit", {
       method: "POST",
       body: form,
+      headers: { Origin: "https://ziscus.com" },
     });
     expect(res.status).toBe(400);
   });
@@ -127,6 +130,7 @@ describe("POST /submit", () => {
     const res = await SELF.fetch("https://test.example.com/submit", {
       method: "POST",
       body: form,
+      headers: { Origin: "https://ziscus.com" },
     });
     expect(res.status).toBe(400);
   });
@@ -167,7 +171,7 @@ describe("POST /submit", () => {
     form.set("slug", "../../etc/passwd");
     form.set("author", "Ada");
     form.set("body", "Hello world");
-    const res = await SELF.fetch("https://test.example.com/submit", { method: "POST", body: form, redirect: "manual" });
+    const res = await SELF.fetch("https://test.example.com/submit", { method: "POST", body: form, redirect: "manual", headers: { Origin: "https://ziscus.com" } });
     expect(res.status).toBe(400);
   });
 
@@ -199,12 +203,12 @@ describe("duplicate comment prevention", () => {
     form.set("slug", slug);
     form.set("author", author);
     form.set("body", body);
-    return new Request("https://test.example.com/submit", { method: "POST", body: form });
+    return new Request("https://test.example.com/submit", { method: "POST", body: form, headers: { Origin: "https://ziscus.com" } });
   }
 
   const noAiEnv = { ...env, MODERATION: "off" } as typeof env;
   // Remove AI_MOD so classify returns "approve" instantly
-  delete (noAiEnv as Record<string, unknown>).AI_MOD;
+  delete (noAiEnv as unknown as Record<string, unknown>).AI_MOD;
 
   it("rejects duplicate POST with same body/slug/IP within 5 minutes", async () => {
     await handleSubmit(makeReq("test", "Ada", "Great article!"), noAiEnv);
@@ -258,10 +262,10 @@ describe("PRG pattern", () => {
     form.set("slug", slug);
     form.set("author", author);
     form.set("body", body);
-    return new Request("https://test.example.com/submit", { method: "POST", body: form });
+    return new Request("https://test.example.com/submit", { method: "POST", body: form, headers: { Origin: "https://ziscus.com" } });
   }
   const prgEnv = { ...env, MODERATION: "off" } as typeof env;
-  delete (prgEnv as Record<string, unknown>).AI_MOD;
+  delete (prgEnv as unknown as Record<string, unknown>).AI_MOD;
 
   it("returns 303 redirect for approved comments (not 200)", async () => {
     const res = await handleSubmit(makeReq("test", "Ada", "Great article!"), prgEnv);
@@ -1085,6 +1089,7 @@ describe("AI moderation security model", () => {
     return new Request("https://test.example.com/submit", {
       method: "POST",
       body: form,
+      headers: { Origin: "https://ziscus.com" },
     });
   }
 
@@ -1478,5 +1483,151 @@ describe("POST /admin/import", () => {
     });
     const log = await env.DB.prepare("SELECT action FROM mod_log WHERE action = 'import'").first<{ action: string }>();
     expect(log).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /admin/gdpr/:ip_hash (Z-04)
+// ---------------------------------------------------------------------------
+
+describe("DELETE /admin/gdpr/:ip_hash", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+    await env.DB.prepare("DELETE FROM mod_log").run();
+    // Seed data for ip_hash "gdpr_target"
+    await env.DB.prepare("INSERT INTO comments (id, slug, author, body, status, ip_hash) VALUES ('g1', 'post', 'A', 'body', 'approved', 'gdpr_target')").run();
+    await env.DB.prepare("INSERT INTO comments (id, slug, author, body, status, ip_hash) VALUES ('g2', 'post', 'A', 'body2', 'pending', 'gdpr_target')").run();
+    await env.DB.prepare("INSERT INTO comments (id, slug, author, body, status, ip_hash) VALUES ('g3', 'other', 'B', 'kept', 'approved', 'other_ip')").run();
+    await env.DB.prepare("INSERT INTO rate_limits (ip_hash, window, count) VALUES ('gdpr_target', '2026-01-01T00:00:00.000Z', 5)").run();
+    await env.DB.prepare("INSERT INTO banned_ips (ip_hash, reason) VALUES ('gdpr_target', 'spam')").run();
+  });
+
+  it("requires auth", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/gdpr/gdpr_target", {
+      method: "DELETE",
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("deletes all comments for the given ip_hash", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/gdpr/gdpr_target", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.status).toBe(200);
+
+    const { results } = await env.DB.prepare("SELECT id FROM comments WHERE ip_hash = 'gdpr_target'").all();
+    expect(results).toHaveLength(0);
+  });
+
+  it("does not delete comments belonging to other ip hashes", async () => {
+    await SELF.fetch("https://test.example.com/admin/gdpr/gdpr_target", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const { results } = await env.DB.prepare("SELECT id FROM comments WHERE ip_hash = 'other_ip'").all();
+    expect(results).toHaveLength(1);
+  });
+
+  it("deletes rate_limits for the given ip_hash", async () => {
+    await SELF.fetch("https://test.example.com/admin/gdpr/gdpr_target", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const row = await env.DB.prepare("SELECT 1 FROM rate_limits WHERE ip_hash = 'gdpr_target'").first();
+    expect(row).toBeNull();
+  });
+
+  it("deletes banned_ips entry for the given ip_hash", async () => {
+    await SELF.fetch("https://test.example.com/admin/gdpr/gdpr_target", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const row = await env.DB.prepare("SELECT 1 FROM banned_ips WHERE ip_hash = 'gdpr_target'").first();
+    expect(row).toBeNull();
+  });
+
+  it("returns JSON with deleted counts", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/gdpr/gdpr_target", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    expect(body.comments).toBe(2);
+    expect(body.rateLimits).toBe(1);
+    expect(body.bans).toBe(1);
+  });
+
+  it("logs gdpr_delete action to mod_log", async () => {
+    await SELF.fetch("https://test.example.com/admin/gdpr/gdpr_target", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+
+    const log = await env.DB.prepare("SELECT action FROM mod_log WHERE action = 'gdpr_delete'").first<{ action: string }>();
+    expect(log).toBeTruthy();
+  });
+
+  it("returns zero counts when ip_hash has no data", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/gdpr/no_such_hash", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.comments).toBe(0);
+    expect(body.rateLimits).toBe(0);
+    expect(body.bans).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Security headers (Z-06)
+// ---------------------------------------------------------------------------
+
+describe("security headers", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+  });
+
+  it("adds X-Content-Type-Options: nosniff to API responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/comments/test");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
+  it("adds Referrer-Policy to API responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/comments/test");
+    expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+  });
+
+  it("adds X-Frame-Options: SAMEORIGIN to non-admin responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/comments/test");
+    expect(res.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
+  });
+
+  it("adds X-Frame-Options: DENY to admin responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/stats", {
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+  });
+
+  it("adds security headers to 401 admin responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/stats");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+  });
+
+  it("adds security headers to 404 responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/does-not-exist");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });

@@ -241,3 +241,30 @@ export async function handleImport(request: Request, env: Env): Promise<Response
     ok: true, comments: commentCount, bans: banCount, modLog: modLogCount,
   }), { status: 200, headers: JSON_HEADERS });
 }
+
+/** DELETE /admin/gdpr/:ip_hash — GDPR "right to be forgotten" erasure */
+export async function handleGdprDelete(ipHash: string, request: Request, env: Env): Promise<Response> {
+  const authErr = requireAuth(request, env);
+  if (authErr) return authErr;
+
+  const [commentsResult, rateLimitsResult, bansResult] = await env.DB.batch([
+    env.DB.prepare("DELETE FROM comments WHERE ip_hash = ?").bind(ipHash),
+    env.DB.prepare("DELETE FROM rate_limits WHERE ip_hash = ?").bind(ipHash),
+    env.DB.prepare("DELETE FROM banned_ips WHERE ip_hash = ?").bind(ipHash),
+  ]);
+
+  const deletedComments = commentsResult.meta.changes;
+  const deletedRateLimits = rateLimitsResult.meta.changes;
+  const deletedBans = bansResult.meta.changes;
+
+  await logModAction(env.DB, "gdpr_delete", "admin", {
+    reason: `GDPR erasure for ip_hash ${ipHash}: ${deletedComments} comments, ${deletedRateLimits} rate_limits, ${deletedBans} bans deleted`,
+  });
+
+  return new Response(JSON.stringify({
+    ok: true,
+    comments: deletedComments,
+    rateLimits: deletedRateLimits,
+    bans: deletedBans,
+  }), { status: 200, headers: JSON_HEADERS });
+}

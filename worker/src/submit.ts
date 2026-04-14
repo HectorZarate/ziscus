@@ -5,11 +5,12 @@ import { classifyComment } from "./classify.js";
 import { logModAction } from "./mod-log.js";
 import { structuralFilter } from "./structural-filter.js";
 
-const MAX_AUTHOR_LENGTH = 100;
-const MAX_BODY_LENGTH = 10000;
-const MIN_BODY_LENGTH = 2;
-const MAX_URLS_IN_BODY = 3;
-const MAX_SLUG_LENGTH = 255;
+/** Resolve runtime limit from env, falling back to the provided default. */
+function limit(envValue: string | undefined, defaultValue: number): number {
+  if (envValue === undefined || envValue === "") return defaultValue;
+  const parsed = parseInt(envValue, 10);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+}
 
 /** Hash an IP address for privacy-preserving rate limiting */
 async function hashIp(ip: string): Promise<string> {
@@ -40,6 +41,13 @@ export async function handleSubmit(
     return new Response("Method not allowed", { status: 405 });
   }
 
+  // Resolve runtime-configurable limits (env vars override hardcoded defaults).
+  const maxBodyLength = limit(env.MAX_BODY_LENGTH, 10000);
+  const minBodyLength = limit(env.MIN_BODY_LENGTH, 2);
+  const maxAuthorLength = limit(env.MAX_AUTHOR_LENGTH, 100);
+  const maxUrlsInBody = limit(env.MAX_URLS_IN_BODY, 3);
+  const maxSlugLength = limit(env.MAX_SLUG_LENGTH, 255);
+
   // Mode check
   const modeRow = await env.DB.prepare("SELECT value FROM meta WHERE key = 'comments_mode'").first<{ value: string }>();
   const mode = modeRow?.value ?? "on";
@@ -62,12 +70,17 @@ export async function handleSubmit(
     }
   }
 
-  // CSRF protection: reject if Origin doesn't match any allowed origin
+  // CSRF protection: reject if Origin doesn't match any allowed origin.
+  // When ALLOWED_ORIGINS is configured, an empty/missing origin is always rejected —
+  // it could indicate a CSRF attack via data: URIs, server-side redirects, or stripped
+  // headers. Empty origins are only permitted in dev mode (ALLOWED_ORIGINS not set).
   const origin = request.headers.get("Origin") ?? request.headers.get("Referer") ?? "";
   const allowedHosts = (env.ALLOWED_ORIGINS ?? "").split(",").map((h) => h.trim()).filter(Boolean);
   const originHost = origin ? new URL(origin).hostname : "";
-  if (originHost && allowedHosts.length > 0 && !allowedHosts.some((h) => originHost === h || originHost.endsWith("." + h))) {
-    return new Response("Invalid origin", { status: 403 });
+  if (allowedHosts.length > 0) {
+    if (!originHost || !allowedHosts.some((h) => originHost === h || originHost.endsWith("." + h))) {
+      return new Response("Invalid origin", { status: 403 });
+    }
   }
 
   // Validate required fields
@@ -76,20 +89,20 @@ export async function handleSubmit(
   if (!body) return new Response("Missing body", { status: 400 });
 
   // Slug validation
-  if (slug.length > MAX_SLUG_LENGTH) return new Response("Slug too long", { status: 400 });
+  if (slug.length > maxSlugLength) return new Response("Slug too long", { status: 400 });
   if (!/^[a-z0-9-]+$/.test(slug)) return new Response("Invalid slug format", { status: 400 });
 
   // Length limits
-  if (author.length > MAX_AUTHOR_LENGTH)
+  if (author.length > maxAuthorLength)
     return new Response("Author name too long", { status: 400 });
-  if (body.length > MAX_BODY_LENGTH)
+  if (body.length > maxBodyLength)
     return new Response("Comment too long", { status: 400 });
-  if (body.length < MIN_BODY_LENGTH)
+  if (body.length < minBodyLength)
     return new Response("Comment too short", { status: 400 });
 
-  // Body heuristics — reject > MAX_URLS_IN_BODY URLs
+  // Body heuristics — reject > maxUrlsInBody URLs
   const urlCount = (body.match(/https?:\/\//g) ?? []).length;
-  if (urlCount > MAX_URLS_IN_BODY)
+  if (urlCount > maxUrlsInBody)
     return new Response("Too many URLs", { status: 400 });
 
   // Layer 0: structural / malicious payload filter

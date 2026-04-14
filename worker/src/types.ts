@@ -16,6 +16,16 @@ export interface Env {
   MODERATION: string;
   /** Max comments per IP per hour. Default 30. */
   RATE_LIMIT?: string;
+  /** Max characters allowed in a comment body. Default 10000. */
+  MAX_BODY_LENGTH?: string;
+  /** Min characters required in a comment body. Default 2. */
+  MIN_BODY_LENGTH?: string;
+  /** Max characters allowed in the author field. Default 100. */
+  MAX_AUTHOR_LENGTH?: string;
+  /** Max number of URLs allowed in a comment body. Default 3. */
+  MAX_URLS_IN_BODY?: string;
+  /** Max characters allowed in a slug. Default 255. */
+  MAX_SLUG_LENGTH?: string;
 }
 
 export interface Comment {
