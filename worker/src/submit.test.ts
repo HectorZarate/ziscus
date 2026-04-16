@@ -151,6 +151,18 @@ describe("CSRF origin validation", () => {
     expect(res.status).toBe(403);
   });
 
+  it("accepts Origin with different casing (DNS is case-insensitive)", async () => {
+    const req = makeRequest({}, { Origin: "https://EXAMPLE.COM" });
+    const res = await handleSubmit(req, envWithOrigins("example.com"));
+    expect(res.status).not.toBe(403);
+  });
+
+  it("accepts when ALLOWED_ORIGINS has mixed case", async () => {
+    const req = makeRequest({}, { Origin: "https://example.com" });
+    const res = await handleSubmit(req, envWithOrigins("Example.Com"));
+    expect(res.status).not.toBe(403);
+  });
+
   it("falls back to Referer when Origin is absent and Referer matches", async () => {
     const req = makeRequest({}, { Referer: "https://example.com/some/page" });
     const res = await handleSubmit(req, envWithOrigins("example.com"));

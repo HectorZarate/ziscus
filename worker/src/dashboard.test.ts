@@ -61,12 +61,12 @@ describe("GET /admin/dashboard", () => {
     expect(res.status).toBe(401);
   });
 
-  it("includes comment counts", async () => {
+  it("includes comment counts in stat widgets", async () => {
     const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
     const html = await res.text();
-    expect(html).toContain("3"); // approved
-    expect(html).toContain("1"); // spam
-    expect(html).toContain("1"); // pending
+    expect(html).toContain('<div class="stat-value">3</div><div class="stat-label">Approved</div>');
+    expect(html).toContain('<div class="stat-value">1</div><div class="stat-label">Pending</div>');
+    expect(html).toContain('<div class="stat-value">1</div><div class="stat-label">Spam blocked</div>');
   });
 
   it("includes top pages by comment count", async () => {

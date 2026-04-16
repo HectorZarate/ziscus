@@ -76,9 +76,9 @@ export async function handleSubmit(
   // headers. Empty origins are only permitted in dev mode (ALLOWED_ORIGINS not set).
   const origin = request.headers.get("Origin") ?? request.headers.get("Referer") ?? "";
   const allowedHosts = (env.ALLOWED_ORIGINS ?? "").split(",").map((h) => h.trim()).filter(Boolean);
-  const originHost = origin ? new URL(origin).hostname : "";
+  const originHost = origin ? new URL(origin).hostname.toLowerCase() : "";
   if (allowedHosts.length > 0) {
-    if (!originHost || !allowedHosts.some((h) => originHost === h || originHost.endsWith("." + h))) {
+    if (!originHost || !allowedHosts.some((h) => originHost === h.toLowerCase() || originHost.endsWith("." + h.toLowerCase()))) {
       return new Response("Invalid origin", { status: 403 });
     }
   }
