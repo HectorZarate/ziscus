@@ -167,7 +167,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     const original = await serveWithFreshComments(slug, url.pathname, request, env);
     // Build new response with mutable headers to clear the flash cookie
     const headers = new Headers(original.headers);
-    headers.set("Set-Cookie", "ziscus_posted=; Max-Age=0; Path=/; SameSite=Lax");
+    headers.set("Set-Cookie", "ziscus_posted=; Max-Age=0; Path=/; SameSite=Lax; Secure; HttpOnly");
     return new Response(original.body, { status: original.status, headers });
   }
 

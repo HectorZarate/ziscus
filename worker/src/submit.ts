@@ -33,6 +33,43 @@ export function escHtml(s: string): string {
     .replace(/\0/g, ""); // strip null bytes
 }
 
+/**
+ * Resolve a post-submit redirect target safely.
+ *
+ * Accepts:
+ *   - path-relative URLs ("/foo/bar") — but rejects "//x" and "/\x" which
+ *     browsers can resolve to absolute origins
+ *   - absolute URLs whose hostname matches an entry in ALLOWED_ORIGINS
+ *     (exact host or `*.<host>` subdomain)
+ *
+ * Anything else (other origins, javascript:, data:, file:, malformed) falls
+ * back to "/" so a forged `redirect` form field cannot weaponize the response
+ * into an open redirect.
+ */
+export function safeRedirect(candidate: string, allowedHosts: string[]): string {
+  if (!candidate) return "/";
+  // Path-relative — first char must be "/" and second char must NOT be "/" or "\"
+  if (candidate.startsWith("/") && candidate[1] !== "/" && candidate[1] !== "\\") {
+    return candidate;
+  }
+  // Absolute URL: must parse, must be http(s), must match an allowed host
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "/";
+    const host = u.hostname.toLowerCase();
+    if (
+      allowedHosts.some(
+        (h) => host === h.toLowerCase() || host.endsWith("." + h.toLowerCase()),
+      )
+    ) {
+      return candidate;
+    }
+  } catch {
+    // not a parseable URL — fall through
+  }
+  return "/";
+}
+
 export async function handleSubmit(
   request: Request,
   env: Env,
@@ -61,15 +98,6 @@ export async function handleSubmit(
   const body = formData.get("body")?.toString().trim() ?? "";
   const redirectUrl = formData.get("redirect")?.toString().trim() ?? "";
 
-  // Per-slug pause check
-  if (slug) {
-    const slugPaused = await env.DB.prepare("SELECT 1 FROM meta WHERE key = ?").bind(`slug_paused:${slug}`).first();
-    if (slugPaused) {
-      const destination = redirectUrl || request.headers.get("Referer") || "/";
-      return new Response(null, { status: 303, headers: { Location: destination } });
-    }
-  }
-
   // CSRF protection: reject if Origin doesn't match any allowed origin.
   // When ALLOWED_ORIGINS is configured, an empty/missing origin is always rejected —
   // it could indicate a CSRF attack via data: URIs, server-side redirects, or stripped
@@ -80,6 +108,16 @@ export async function handleSubmit(
   if (allowedHosts.length > 0) {
     if (!originHost || !allowedHosts.some((h) => originHost === h.toLowerCase() || originHost.endsWith("." + h.toLowerCase()))) {
       return new Response("Invalid origin", { status: 403 });
+    }
+  }
+
+  // Per-slug pause check (after CSRF so a forged request can't even probe pause state)
+  if (slug) {
+    const slugPaused = await env.DB.prepare("SELECT 1 FROM meta WHERE key = ?").bind(`slug_paused:${slug}`).first();
+    if (slugPaused) {
+      const candidate = redirectUrl || request.headers.get("Referer") || "/";
+      const destination = safeRedirect(candidate, allowedHosts);
+      return new Response(null, { status: 303, headers: { Location: destination } });
     }
   }
 
@@ -184,13 +222,17 @@ export async function handleSubmit(
     }
   }
 
-  const destination = redirectUrl || request.headers.get("Referer") || "/";
+  const candidate = redirectUrl || request.headers.get("Referer") || "/";
+  const destination = safeRedirect(candidate, allowedHosts);
 
   // PRG: always redirect with 303. Set a flash cookie so the GET handler
   // serves fresh comments via HTMLRewriter (commenter sees their comment instantly).
   const headers = new Headers({ Location: destination });
   if (status === "approved" || status === "spam") {
-    headers.set("Set-Cookie", `ziscus_posted=${slug}; Max-Age=120; Path=/; SameSite=Lax`);
+    headers.set(
+      "Set-Cookie",
+      `ziscus_posted=${slug}; Max-Age=120; Path=/; SameSite=Lax; Secure; HttpOnly`,
+    );
   }
   return new Response(null, { status: 303, headers });
 }

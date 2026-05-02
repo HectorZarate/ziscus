@@ -331,3 +331,194 @@ describe("runtime-configurable limits", () => {
     expect(await res.text()).not.toBe("Slug too long");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Flash cookie security flags
+// ---------------------------------------------------------------------------
+
+describe("ziscus_posted flash cookie", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+    await env.DB.prepare("DELETE FROM mod_log").run();
+  });
+
+  function autoApproveEnv() {
+    const e = { ...env, MODERATION: "off" } as typeof env;
+    delete (e as unknown as Record<string, unknown>).AI_MOD;
+    delete (e as unknown as Record<string, unknown>).ALLOWED_ORIGINS;
+    return e;
+  }
+
+  it("sets Secure flag on the flash cookie", async () => {
+    const req = makeRequest({ body: "Real comment content here." });
+    const res = await handleSubmit(req, autoApproveEnv());
+    const cookie = res.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toMatch(/ziscus_posted=/);
+    expect(cookie).toMatch(/;\s*Secure/i);
+  });
+
+  it("sets HttpOnly flag on the flash cookie", async () => {
+    const req = makeRequest({ body: "Real comment content here." });
+    const res = await handleSubmit(req, autoApproveEnv());
+    const cookie = res.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toMatch(/;\s*HttpOnly/i);
+  });
+
+  it("keeps SameSite=Lax on the flash cookie", async () => {
+    const req = makeRequest({ body: "Real comment content here." });
+    const res = await handleSubmit(req, autoApproveEnv());
+    const cookie = res.headers.get("Set-Cookie") ?? "";
+    expect(cookie).toMatch(/SameSite=Lax/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Redirect parameter validation (open-redirect protection)
+// ---------------------------------------------------------------------------
+
+describe("redirect parameter validation", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare("DELETE FROM banned_ips").run();
+    await env.DB.prepare("DELETE FROM mod_log").run();
+  });
+
+  function originsEnv(allowed: string) {
+    const e = { ...env, ALLOWED_ORIGINS: allowed, MODERATION: "off" } as typeof env;
+    delete (e as unknown as Record<string, unknown>).AI_MOD;
+    return e;
+  }
+
+  function devEnvNoOrigins() {
+    const e = { ...env, MODERATION: "off" } as typeof env;
+    delete (e as unknown as Record<string, unknown>).AI_MOD;
+    delete (e as unknown as Record<string, unknown>).ALLOWED_ORIGINS;
+    return e;
+  }
+
+  function makeRequestWith(
+    fields: { slug?: string; author?: string; body?: string; redirect?: string },
+    headers: Record<string, string> = {},
+  ): Request {
+    const form = new FormData();
+    form.set("slug", fields.slug ?? "test-post");
+    form.set("author", fields.author ?? "Ada");
+    form.set("body", fields.body ?? "Real comment content here.");
+    if (fields.redirect !== undefined) form.set("redirect", fields.redirect);
+    return new Request("https://test.example.com/submit", {
+      method: "POST",
+      body: form,
+      headers,
+    });
+  }
+
+  it("rejects redirect to a host not in ALLOWED_ORIGINS (open redirect)", async () => {
+    const req = makeRequestWith(
+      { redirect: "https://evil.com/phish" },
+      { Origin: "https://example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    expect(res.status).toBe(303);
+    const loc = res.headers.get("Location") ?? "";
+    expect(loc).not.toContain("evil.com");
+  });
+
+  it("allows redirect to a host that matches ALLOWED_ORIGINS exactly", async () => {
+    const req = makeRequestWith(
+      { redirect: "https://example.com/article" },
+      { Origin: "https://example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    expect(res.headers.get("Location")).toBe("https://example.com/article");
+  });
+
+  it("allows redirect to a subdomain of an allowed host", async () => {
+    const req = makeRequestWith(
+      { redirect: "https://blog.example.com/post" },
+      { Origin: "https://blog.example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    expect(res.headers.get("Location")).toBe("https://blog.example.com/post");
+  });
+
+  it("allows a path-only redirect (relative URL)", async () => {
+    const req = makeRequestWith(
+      { redirect: "/some/page" },
+      { Origin: "https://example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    expect(res.headers.get("Location")).toBe("/some/page");
+  });
+
+  it("rejects protocol-relative URL (//evil.com/...)", async () => {
+    const req = makeRequestWith(
+      { redirect: "//evil.com/phish" },
+      { Origin: "https://example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    const loc = res.headers.get("Location") ?? "";
+    expect(loc).not.toContain("evil.com");
+  });
+
+  it("rejects javascript: URI", async () => {
+    const req = makeRequestWith(
+      { redirect: "javascript:alert(1)" },
+      { Origin: "https://example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    const loc = res.headers.get("Location") ?? "";
+    expect(loc.toLowerCase()).not.toContain("javascript:");
+  });
+
+  it("rejects data: URI", async () => {
+    const req = makeRequestWith(
+      { redirect: "data:text/html,<script>alert(1)</script>" },
+      { Origin: "https://example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    const loc = res.headers.get("Location") ?? "";
+    expect(loc.toLowerCase()).not.toMatch(/^data:/);
+  });
+
+  it("rejects backslash-prefixed bypass (/\\evil.com)", async () => {
+    const req = makeRequestWith(
+      { redirect: "/\\evil.com/phish" },
+      { Origin: "https://example.com" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    const loc = res.headers.get("Location") ?? "";
+    expect(loc).not.toContain("evil.com");
+  });
+
+  it("validates the Referer fallback against ALLOWED_ORIGINS too", async () => {
+    // No `redirect` field; Referer is from a non-allowed host.
+    // Origin matches so CSRF passes, but Referer host should not be trusted as a redirect target.
+    const req = makeRequestWith(
+      {},
+      { Origin: "https://example.com", Referer: "https://evil.com/foo" },
+    );
+    const res = await handleSubmit(req, originsEnv("example.com"));
+    const loc = res.headers.get("Location") ?? "";
+    expect(loc).not.toContain("evil.com");
+  });
+
+  it("dev mode (no ALLOWED_ORIGINS) rejects absolute URLs to be safe", async () => {
+    const req = makeRequestWith({ redirect: "https://evil.com/phish" });
+    const res = await handleSubmit(req, devEnvNoOrigins());
+    const loc = res.headers.get("Location") ?? "";
+    expect(loc).not.toContain("evil.com");
+  });
+
+  it("dev mode (no ALLOWED_ORIGINS) still allows relative redirects", async () => {
+    const req = makeRequestWith({ redirect: "/local/page" });
+    const res = await handleSubmit(req, devEnvNoOrigins());
+    expect(res.headers.get("Location")).toBe("/local/page");
+  });
+});
