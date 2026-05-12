@@ -212,7 +212,7 @@ export async function handleSubmit(
     if (env.AI_MOD && mode !== "paused") {
       await logModAction(env.DB, `ai_${classification}`, "ai", {
         commentId, slug,
-        metadata: { model: "@cf/meta/llama-3.1-8b-instruct", latency_ms: classifyMs },
+        metadata: { model: "@cf/google/gemma-4-26b-a4b-it", latency_ms: classifyMs },
       });
     }
 

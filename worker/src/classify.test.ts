@@ -123,7 +123,7 @@ describe("classifyComment", () => {
     const env = mockEnv("approve");
     await classifyComment("Alice", "Great post!", env);
     const call = (env.AI_MOD!.run as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(call[0]).toBe("@cf/meta/llama-3.1-8b-instruct");
+    expect(call[0]).toBe("@cf/google/gemma-4-26b-a4b-it");
     expect(call[1].max_tokens).toBe(5);
     expect(call[1].temperature).toBe(0);
     expect(call[1].stream).toBe(false);
