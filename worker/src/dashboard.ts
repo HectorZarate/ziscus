@@ -84,6 +84,7 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Admin Dashboard</title>
 <style>
   body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 2rem 1rem; background: #0d0d0d; color: #e0e0e0; }

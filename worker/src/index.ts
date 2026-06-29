@@ -43,7 +43,14 @@ function addSecurityHeaders(res: Response, isAdmin: boolean): Response {
   const headers = new Headers(res.headers);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", isAdmin ? "DENY" : "SAMEORIGIN");
-  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  // Admin URLs carry the secret token in the query string, so use the strictest
+  // referrer policy (don't even leak the bare origin) and keep them out of any
+  // search index or shared cache — defense in depth if a tokened URL ever leaks.
+  headers.set("Referrer-Policy", isAdmin ? "no-referrer" : "strict-origin-when-cross-origin");
+  if (isAdmin) {
+    headers.set("X-Robots-Tag", "noindex, nofollow");
+    headers.set("Cache-Control", "no-store");
+  }
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 

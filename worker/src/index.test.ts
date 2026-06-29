@@ -1626,6 +1626,46 @@ describe("security headers", () => {
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
   });
 
+  it("adds X-Robots-Tag: noindex to admin responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/stats", {
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+  });
+
+  it("keeps admin responses out of the index even when unauthenticated (401)", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/stats");
+    expect(res.status).toBe(401);
+    expect(res.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+  });
+
+  it("uses Referrer-Policy: no-referrer on admin responses (token in URL)", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/stats", {
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
+  });
+
+  it("sets Cache-Control: no-store on admin responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/stats", {
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` },
+    });
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("does not add X-Robots-Tag to public responses", async () => {
+    const res = await SELF.fetch("https://test.example.com/comments/test");
+    expect(res.headers.get("X-Robots-Tag")).toBeNull();
+  });
+
+  it("dashboard HTML carries a noindex robots meta tag", async () => {
+    const res = await SELF.fetch(
+      `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('<meta name="robots" content="noindex, nofollow">');
+  });
+
   it("adds security headers to 404 responses", async () => {
     const res = await SELF.fetch("https://test.example.com/does-not-exist");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
