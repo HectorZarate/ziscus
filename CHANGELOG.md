@@ -10,6 +10,9 @@
 - **Comments stuck in pending (P0)**: the spam classifier had been pointed at a reasoning model (`gemma-4-26b-a4b-it`) incompatible with the `max_tokens: 5` one-word prompt, so every comment fell through to `review` → `pending` and never published. Moved to `@cf/meta/llama-3.1-8b-instruct-fast`.
 - **Instant comment preview restored**: the wrangler 4.87 upgrade silently dropped the `serve_directly = false` assets option, so Cloudflare served `GET /` statically and bypassed the Worker — killing the flash-cookie HTMLRewriter that shows a commenter their own comment immediately. Replaced with `run_worker_first = true`.
 
+### Improvements
+- 228 tests (up from 203)
+
 ## 0.5.0 — 2026-04-14
 
 ### Security

@@ -48,7 +48,7 @@ Two packages:
 npx ziscus deploy              # deploy Worker, create D1, set secrets — one command
 npx ziscus init                # scaffold SSG templates (Hugo, Astro, Eleventy, Jekyll, Next.js)
 npx ziscus ai-mod enable       # optional: turn on AI spam filtering
-npx ziscus dashboard           # open admin dashboard in browser
+npx ziscus dashboard           # print the Bearer header + open admin dashboard
 ```
 
 That's it. `deploy` handles Worker deployment, D1 setup, secret generation, and SSG scaffolding. Read on if you want to understand each piece or set things up manually.
@@ -97,7 +97,7 @@ const css = ziscusStyles();
 ### 3. Moderate
 
 ```bash
-npx ziscus dashboard                # open admin dashboard in browser
+npx ziscus dashboard                  # print the Bearer header + open dashboard
 npx ziscus comments --status pending  # view pending queue
 npx ziscus comments --status spam     # view caught spam
 npx ziscus mod-log                    # moderation audit trail
