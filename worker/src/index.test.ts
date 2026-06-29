@@ -421,6 +421,21 @@ describe("POST /approve/:id", () => {
     expect(res.status).toBe(401);
   });
 
+  it("redirects a browser form submit (Accept: text/html) back to the dashboard", async () => {
+    await env.DB.prepare(
+      "INSERT INTO comments (id, slug, author, body, status) VALUES ('abc', 'test', 'Ada', 'Hello', 'pending')",
+    ).run();
+
+    const res = await SELF.fetch("https://test.example.com/approve/abc", {
+      method: "POST",
+      redirect: "manual",
+      headers: { Authorization: `Bearer ${env.ADMIN_SECRET}`, Accept: "text/html" },
+    });
+    expect(res.status).toBe(303);
+    // No token in the redirect target — auth rides on the header.
+    expect(res.headers.get("Location")).toBe("/admin/dashboard");
+  });
+
   it("returns 404 for nonexistent comment", async () => {
     const res = await SELF.fetch("https://test.example.com/approve/nonexistent", {
       method: "POST",
@@ -1660,7 +1675,8 @@ describe("security headers", () => {
 
   it("dashboard HTML carries a noindex robots meta tag", async () => {
     const res = await SELF.fetch(
-      `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`,
+      "https://test.example.com/admin/dashboard",
+      { headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` } },
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('<meta name="robots" content="noindex, nofollow">');

@@ -105,6 +105,14 @@ npx ziscus mod-log                    # moderation audit trail
 
 ![ziscus admin dashboard](site/_site/images/screenshot-dashboard.png)
 
+> **Dashboard auth is header-only.** The admin secret is never placed in a URL
+> (query-string secrets leak into browser history, proxy/CDN logs, `Referer`
+> headers, and search indexes). Every admin request must carry
+> `Authorization: Bearer $ADMIN_SECRET`. From the terminal this is automatic.
+> In a browser, set the header once for your worker's host with a request-header
+> extension (e.g. [ModHeader](https://modheader.com/) or Requestly), then open
+> `/admin/dashboard`. `npx ziscus dashboard` prints the exact header to add.
+
 Three global modes (`POST /admin/mode`):
 
 | Mode | Submissions | Visibility |

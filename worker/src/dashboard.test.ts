@@ -26,6 +26,8 @@ async function initDb() {
   }
 }
 
+const ADMIN_AUTH = { headers: { Authorization: `Bearer ${env.ADMIN_SECRET}` } };
+
 describe("GET /admin/dashboard", () => {
   beforeEach(async () => {
     await initDb();
@@ -45,8 +47,8 @@ describe("GET /admin/dashboard", () => {
     await env.DB.prepare("INSERT INTO mod_log (id, action, actor, slug) VALUES ('m4', 'ai_spam', 'ai', 'post-b')").run();
   });
 
-  it("returns HTML with token auth", async () => {
-    const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+  it("returns HTML with Bearer auth", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/html");
   });
@@ -57,12 +59,26 @@ describe("GET /admin/dashboard", () => {
   });
 
   it("returns 401 with wrong token", async () => {
-    const res = await SELF.fetch("https://test.example.com/admin/dashboard?token=wrong");
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", {
+      headers: { Authorization: "Bearer wrong" },
+    });
     expect(res.status).toBe(401);
   });
 
-  it("includes comment counts in stat widgets", async () => {
+  it("rejects query-string token (header-only auth)", async () => {
     const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+    expect(res.status).toBe(401);
+  });
+
+  it("never embeds the secret in dashboard HTML", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
+    const html = await res.text();
+    expect(html).not.toContain("token=");
+    expect(html).not.toContain(env.ADMIN_SECRET);
+  });
+
+  it("includes comment counts in stat widgets", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
     const html = await res.text();
     expect(html).toContain('<div class="stat-value">3</div><div class="stat-label">Approved</div>');
     expect(html).toContain('<div class="stat-value">1</div><div class="stat-label">Pending</div>');
@@ -70,14 +86,14 @@ describe("GET /admin/dashboard", () => {
   });
 
   it("includes top pages by comment count", async () => {
-    const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
     const html = await res.text();
     expect(html).toContain("post-a");
     expect(html).toContain("post-b");
   });
 
   it("includes recent spam with full body", async () => {
-    const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
     const html = await res.text();
     expect(html).toContain("Recent spam");
     expect(html).toContain("Spammer");
@@ -85,14 +101,14 @@ describe("GET /admin/dashboard", () => {
   });
 
   it("includes pending queue", async () => {
-    const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
     const html = await res.text();
     expect(html).toContain("Pending");
     expect(html).toContain("Review me");
   });
 
   it("shows current settings", async () => {
-    const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
     const html = await res.text();
     expect(html).toContain("Comments");
     expect(html).toContain("AI Mod");
@@ -107,7 +123,7 @@ describe("GET /admin/dashboard", () => {
   });
 
   it("action buttons use form POST, not inline JavaScript with token", async () => {
-    const res = await SELF.fetch(`https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`);
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
     const html = await res.text();
     // Must NOT expose token in onclick JavaScript
     expect(html).not.toContain("onclick");
@@ -115,6 +131,9 @@ describe("GET /admin/dashboard", () => {
     // Must use form POST instead
     expect(html).toContain('<form method="POST"');
     expect(html).toContain("action-btn");
+    // Must never leak the secret or a token query param into the HTML
+    expect(html).not.toContain("token=");
+    expect(html).not.toContain(env.ADMIN_SECRET);
   });
 
   describe("pagination", () => {
@@ -135,7 +154,8 @@ describe("GET /admin/dashboard", () => {
 
     it("page=1 shows first 20 pending comments (newest first)", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=1`
+        `https://test.example.com/admin/dashboard?page=1`,
+        ADMIN_AUTH
       );
       expect(res.status).toBe(200);
       const html = await res.text();
@@ -147,7 +167,8 @@ describe("GET /admin/dashboard", () => {
 
     it("page=2 shows oldest 5 comments (different from page 1)", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=2`
+        `https://test.example.com/admin/dashboard?page=2`,
+        ADMIN_AUTH
       );
       expect(res.status).toBe(200);
       const html = await res.text();
@@ -159,7 +180,8 @@ describe("GET /admin/dashboard", () => {
 
     it("shows Page X of Y indicator", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=1`
+        `https://test.example.com/admin/dashboard?page=1`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toMatch(/Page 1 of 2/);
@@ -167,24 +189,27 @@ describe("GET /admin/dashboard", () => {
 
     it("shows Showing N results count", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=1`
+        `https://test.example.com/admin/dashboard?page=1`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toMatch(/Showing 20 of 25/);
     });
 
-    it("shows next link on page 1 that preserves token", async () => {
+    it("shows next link on page 1 (no token in URL)", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=1`
+        `https://test.example.com/admin/dashboard?page=1`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toContain(`page=2`);
-      expect(html).toContain(`token=${env.ADMIN_SECRET}`);
+      expect(html).not.toContain("token=");
     });
 
     it("shows prev link on page 2", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=2`
+        `https://test.example.com/admin/dashboard?page=2`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toContain(`page=1`);
@@ -192,7 +217,8 @@ describe("GET /admin/dashboard", () => {
 
     it("does not show prev link on page 1", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=1`
+        `https://test.example.com/admin/dashboard?page=1`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       // page=1 prev link should not appear (no ?page=0)
@@ -201,7 +227,8 @@ describe("GET /admin/dashboard", () => {
 
     it("does not show next link on last page", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&page=2`
+        `https://test.example.com/admin/dashboard?page=2`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).not.toContain("page=3");
@@ -224,7 +251,8 @@ describe("GET /admin/dashboard", () => {
 
     it("renders a search form with GET method", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}`
+        "https://test.example.com/admin/dashboard",
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toContain('<form method="GET"');
@@ -233,7 +261,8 @@ describe("GET /admin/dashboard", () => {
 
     it("q=hello filters by body text", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&q=hello`
+        `https://test.example.com/admin/dashboard?q=hello`,
+        ADMIN_AUTH
       );
       expect(res.status).toBe(200);
       const html = await res.text();
@@ -244,7 +273,8 @@ describe("GET /admin/dashboard", () => {
 
     it("q=searchableauthor filters by author (case-insensitive)", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&q=searchableauthor`
+        `https://test.example.com/admin/dashboard?q=searchableauthor`,
+        ADMIN_AUTH
       );
       expect(res.status).toBe(200);
       const html = await res.text();
@@ -255,7 +285,8 @@ describe("GET /admin/dashboard", () => {
 
     it("q= with no match shows empty state", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&q=zzznomatch`
+        `https://test.example.com/admin/dashboard?q=zzznomatch`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toContain("No pending comments");
@@ -263,7 +294,8 @@ describe("GET /admin/dashboard", () => {
 
     it("search form preserves q value in input", async () => {
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&q=hello`
+        `https://test.example.com/admin/dashboard?q=hello`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toContain('value="hello"');
@@ -280,7 +312,8 @@ describe("GET /admin/dashboard", () => {
           .run();
       }
       const res = await SELF.fetch(
-        `https://test.example.com/admin/dashboard?token=${env.ADMIN_SECRET}&q=world&page=1`
+        `https://test.example.com/admin/dashboard?q=world&page=1`,
+        ADMIN_AUTH
       );
       const html = await res.text();
       expect(html).toContain("q=world");

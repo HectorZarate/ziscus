@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — 2026-06-29
+
+### Security
+- **Header-only admin auth**: the admin secret is no longer accepted as a `?token=` query parameter anywhere — auth is `Authorization: Bearer <ADMIN_SECRET>` only. The secret never appears in a URL, so it can't leak via browser history, proxy/CDN logs, `Referer`, or a search index. (Reverses the 0.5.0 query-param token support.) In a browser, set the header with a request-header extension; `npx ziscus dashboard` prints the exact header.
+- **Admin pages excluded from indexes**: all `/admin/*` responses now send `X-Robots-Tag: noindex, nofollow`, `Referrer-Policy: no-referrer`, and `Cache-Control: no-store`; the dashboard also carries a `<meta name="robots" content="noindex, nofollow">`.
+
+### Fixes
+- **Comments stuck in pending (P0)**: the spam classifier had been pointed at a reasoning model (`gemma-4-26b-a4b-it`) incompatible with the `max_tokens: 5` one-word prompt, so every comment fell through to `review` → `pending` and never published. Moved to `@cf/meta/llama-3.1-8b-instruct-fast`.
+- **Instant comment preview restored**: the wrangler 4.87 upgrade silently dropped the `serve_directly = false` assets option, so Cloudflare served `GET /` statically and bypassed the Worker — killing the flash-cookie HTMLRewriter that shows a commenter their own comment immediately. Replaced with `run_worker_first = true`.
+
 ## 0.5.0 — 2026-04-14
 
 ### Security

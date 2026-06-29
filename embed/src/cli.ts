@@ -364,14 +364,31 @@ program
       }
     }
 
-    const url = `${endpoint.replace(/\/$/, "")}/admin/dashboard?token=${secret}`;
-    console.log(`Opening dashboard: ${endpoint}/admin/dashboard`);
+    // The dashboard authenticates via the Authorization header only — the secret
+    // is never placed in a URL (it would leak into history, logs, and Referer).
+    // A browser can't set that header on a plain navigation, so configure a
+    // request-header extension (ModHeader, Requestly, etc.) once for this host.
+    const base = endpoint.replace(/\/$/, "");
+    const url = `${base}/admin/dashboard`;
+    let host: string;
+    try {
+      host = new URL(base).host;
+    } catch {
+      host = base;
+    }
+
+    console.log(`Admin dashboard: ${url}\n`);
+    console.log("This dashboard is header-authenticated. In your browser, add a");
+    console.log(`request header for ${host} (e.g. with the ModHeader extension):\n`);
+    console.log(`  Authorization: Bearer ${secret}\n`);
+    console.log("Then open the dashboard URL. From the terminal you can instead use:");
+    console.log(`  curl -H "Authorization: Bearer $ZISCUS_ADMIN_SECRET" ${url}\n`);
+
     const { execSync } = await import("node:child_process");
     try {
       execSync(`open "${url}"`, { stdio: "ignore" });
     } catch {
-      // Fallback for non-macOS
-      console.log(`Open this URL in your browser:\n${url}`);
+      // Fallback for non-macOS — URL already printed above.
     }
   });
 

@@ -1,22 +1,11 @@
 import type { Env } from "./types.js";
-
-/** Check auth via query-param token OR Bearer header */
-function checkDashboardAuth(request: Request, env: Env): boolean {
-  if (!env.ADMIN_SECRET) return false;
-  const url = new URL(request.url);
-  const token = url.searchParams.get("token");
-  if (token === env.ADMIN_SECRET) return true;
-  const auth = request.headers.get("Authorization");
-  if (auth === `Bearer ${env.ADMIN_SECRET}`) return true;
-  return false;
-}
+import { requireAuth } from "./auth.js";
 
 const PAGE_SIZE = 20;
 
 export async function handleDashboard(request: Request, env: Env): Promise<Response> {
-  if (!checkDashboardAuth(request, env)) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const authErr = requireAuth(request, env);
+  if (authErr) return authErr;
 
   const url = new URL(request.url);
   const pageParam = parseInt(url.searchParams.get("page") ?? "1", 10);
@@ -64,13 +53,10 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   const totalPending = pendingCountResult?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalPending / PAGE_SIZE));
 
-  const token = url.searchParams.get("token") ?? "";
-  const tokenParam = token ? `?token=${token}` : "";
-
-  // Build nav link helper — preserves token and q params
+  // Build nav link helper — preserves the q param. The admin secret is never
+  // placed in a URL; auth rides on the Authorization header for every request.
   function navHref(targetPage: number): string {
     const p = new URLSearchParams();
-    if (token) p.set("token", token);
     if (q) p.set("q", q);
     p.set("page", String(targetPage));
     return `/admin/dashboard?${p.toString()}`;
@@ -162,7 +148,6 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 
 <h2>Pending queue</h2>
 <form method="GET" action="/admin/dashboard" class="search-form">
-  ${token ? `<input type="hidden" name="token" value="${esc(token)}">` : ""}
   <input type="text" name="q" placeholder="Search by author or comment…" value="${esc(q)}">
   <button type="submit">Search</button>
 </form>
@@ -179,9 +164,9 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
     <td>${esc(c.slug)}</td>
     <td>${c.created_at.slice(0, 10)}</td>
     <td class="actions">
-      <form method="POST" action="/approve/${c.id}${tokenParam}" style="display:inline"><button type="submit" class="approve action-btn">approve</button></form>
-      <form method="POST" action="/spam/${c.id}${tokenParam}" style="display:inline"><button type="submit" class="spam-action action-btn">spam</button></form>
-      <form method="POST" action="/reject/${c.id}${tokenParam}" style="display:inline"><button type="submit" class="reject action-btn">reject</button></form>
+      <form method="POST" action="/approve/${c.id}" style="display:inline"><button type="submit" class="approve action-btn">approve</button></form>
+      <form method="POST" action="/spam/${c.id}" style="display:inline"><button type="submit" class="spam-action action-btn">spam</button></form>
+      <form method="POST" action="/reject/${c.id}" style="display:inline"><button type="submit" class="reject action-btn">reject</button></form>
     </td>
   </tr>`).join("\n  ")}
   ${pending.length === 0 ? "<tr><td colspan=5>No pending comments</td></tr>" : ""}

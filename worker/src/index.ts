@@ -27,12 +27,19 @@ import {
   handleGdprDelete,
 } from "./admin-api.js";
 
-function dashboardRedirect(url: URL, res: Response): Response {
-  const token = url.searchParams.get("token");
-  if (token && res.ok) {
+/**
+ * After a moderation action (approve/spam/reject), send browser form submits
+ * back to the refreshed dashboard while letting API/CLI callers keep the raw
+ * JSON result. A browser navigation sends an `Accept` header containing
+ * `text/html`; fetch/CLI callers send a wildcard or JSON Accept. (We no longer
+ * key off a `?token=` param — the secret never appears in a URL.)
+ */
+function dashboardRedirect(request: Request, res: Response): Response {
+  const accept = request.headers.get("Accept") ?? "";
+  if (res.ok && accept.includes("text/html")) {
     return new Response(null, {
       status: 303,
-      headers: { Location: `/admin/dashboard?token=${encodeURIComponent(token)}` },
+      headers: { Location: "/admin/dashboard" },
     });
   }
   return res;
@@ -43,9 +50,9 @@ function addSecurityHeaders(res: Response, isAdmin: boolean): Response {
   const headers = new Headers(res.headers);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", isAdmin ? "DENY" : "SAMEORIGIN");
-  // Admin URLs carry the secret token in the query string, so use the strictest
-  // referrer policy (don't even leak the bare origin) and keep them out of any
-  // search index or shared cache — defense in depth if a tokened URL ever leaks.
+  // Admin pages are authenticated and private: use the strictest referrer policy
+  // (don't even leak the bare origin), and keep them out of any search index or
+  // shared cache — defense in depth for the admin surface.
   headers.set("Referrer-Policy", isAdmin ? "no-referrer" : "strict-origin-when-cross-origin");
   if (isAdmin) {
     headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -94,21 +101,21 @@ async function route(request: Request, env: Env): Promise<Response> {
   const approveMatch = path.match(/^\/approve\/([a-z0-9]+)\/?$/);
   if (approveMatch && request.method === "POST") {
     const res = await handleApprove(approveMatch[1]!, request, env);
-    return dashboardRedirect(url, res);
+    return dashboardRedirect(request, res);
   }
 
   // POST /reject/:id
   const rejectMatch = path.match(/^\/reject\/([a-z0-9]+)\/?$/);
   if (rejectMatch && request.method === "POST") {
     const res = await handleReject(rejectMatch[1]!, request, env);
-    return dashboardRedirect(url, res);
+    return dashboardRedirect(request, res);
   }
 
   // POST /spam/:id
   const spamMatch = path.match(/^\/spam\/([a-z0-9]+)\/?$/);
   if (spamMatch && request.method === "POST") {
     const res = await handleSpam(spamMatch[1]!, request, env);
-    return dashboardRedirect(url, res);
+    return dashboardRedirect(request, res);
   }
 
   // POST /unapprove/:id
