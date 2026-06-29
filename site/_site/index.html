@@ -411,47 +411,6 @@ footer {
   font-size: 0.75rem;
 }
 
-/* === Post thumbnails on index === */
-.post-thumb {
-  display: block;
-  margin-bottom: 0.75rem;
-  line-height: 0;
-}
-
-.post-thumb img {
-  width: 100%;
-  max-height: 280px;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 1px solid var(--color-border);
-}
-
-/* === Post navigation === */
-.post-nav {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--color-border);
-  font-size: 0.9rem;
-}
-
-.post-nav a {
-  color: var(--color-link);
-  text-decoration: none;
-  max-width: 45%;
-}
-
-.post-nav a:hover {
-  text-decoration: underline;
-}
-
-.post-nav-next {
-  text-align: right;
-  margin-left: auto;
-}
-
 /* === Selection — intentional === */
 ::selection {
   background: var(--color-link);
@@ -594,7 +553,7 @@ nav a, button, .tag {
 <p>Leave a comment below. It will appear instantly for you and appear on the site live in ~60 seconds.</p>
 </div>
       <section id="comments" class="comments-section">
-      <h2>6 Comments</h2>
+      <h2>9 Comments</h2>
       <article class="comment">
         <header class="comment-header">
           <strong class="comment-author">hdz</strong>
@@ -636,6 +595,27 @@ nav a, button, .tag {
           <time datetime="2026-04-14T02:58:43Z">April 14, 2026</time>
         </header>
         <p class="comment-body">Auto-approve, or review first with approve / reject / spam / ban</p>
+      </article>
+      <article class="comment">
+        <header class="comment-header">
+          <strong class="comment-author">bobby tables&amp;quot;;DROP TABLE comments;--</strong>
+          <time datetime="2026-06-28T16:08:18Z">June 28, 2026</time>
+        </header>
+        <p class="comment-body">Don&amp;#39;t you need to route your website through cloudflare for it to work?</p>
+      </article>
+      <article class="comment">
+        <header class="comment-header">
+          <strong class="comment-author">asd</strong>
+          <time datetime="2026-06-28T17:43:30Z">June 28, 2026</time>
+        </header>
+        <p class="comment-body">asd</p>
+      </article>
+      <article class="comment">
+        <header class="comment-header">
+          <strong class="comment-author">hnanon</strong>
+          <time datetime="2026-06-28T22:15:58Z">June 28, 2026</time>
+        </header>
+        <p class="comment-body">hi</p>
       </article>
     </section>
     <form method="POST" action="https://ziscus.com/submit" class="comment-form">
