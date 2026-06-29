@@ -2,7 +2,7 @@ import type { Env } from "./types.js";
 
 export type Classification = "approve" | "spam" | "review";
 
-const MODEL = "@cf/google/gemma-4-26b-a4b-it";
+const MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const MAX_BODY_CHARS = 500;
 const AI_TIMEOUT_MS = 3000;
 
