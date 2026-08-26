@@ -1,5 +1,7 @@
 import type { Env } from "./types.js";
 import { requireAuth } from "./auth.js";
+import { getLastRebuildResult } from "./debounce.js";
+import { unescapeHtml } from "./html.js";
 
 const PAGE_SIZE = 20;
 
@@ -20,7 +22,7 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   const pendingCountQuery = `SELECT COUNT(*) as count FROM comments WHERE status = 'pending'${searchFilter}`;
   const pendingDataQuery = `SELECT id, slug, author, body, created_at FROM comments WHERE status = 'pending'${searchFilter} ORDER BY created_at DESC LIMIT ${PAGE_SIZE} OFFSET ${offset}`;
 
-  const [statsResult, topPagesResult, latestPagesResult, pendingCountResult, pendingResult, spamResult, modeRow] = await Promise.all([
+  const [statsResult, topPagesResult, latestPagesResult, pendingCountResult, pendingResult, spamResult, modeRow, lastRebuild] = await Promise.all([
     env.DB.prepare("SELECT status, COUNT(*) as count FROM comments GROUP BY status")
       .all<{ status: string; count: number }>(),
     env.DB.prepare("SELECT slug, COUNT(*) as count FROM comments WHERE status = 'approved' GROUP BY slug ORDER BY count DESC LIMIT 10")
@@ -36,6 +38,7 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
     env.DB.prepare("SELECT id, slug, author, body, created_at FROM comments WHERE status = 'spam' ORDER BY created_at DESC LIMIT 5")
       .all<{ id: string; slug: string; author: string; body: string; created_at: string }>(),
     env.DB.prepare("SELECT value FROM meta WHERE key = 'comments_mode'").first<{ value: string }>(),
+    getLastRebuildResult(env.DB),
   ]);
 
   const stats: Record<string, number> = { pending: 0, approved: 0, rejected: 0, spam: 0 };
@@ -49,6 +52,28 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   const recentSpam = spamResult.results ?? [];
   const commentsMode = modeRow?.value ?? "on";
   const aiModEnabled = !!env.AI_MOD;
+
+  // Rebuild pipeline card — the one place an operator can see that the
+  // GitHub dispatch is actually being accepted (a dead token used to fail silently).
+  let rebuildClass = "muted";
+  let rebuildLabel = "never run";
+  let rebuildDetail = "Fires on the first approved comment.";
+  if (lastRebuild) {
+    const when = `${lastRebuild.at.replace("T", " ").slice(0, 16)} UTC`;
+    if (lastRebuild.dispatched) {
+      rebuildClass = "on";
+      rebuildLabel = "ok";
+      rebuildDetail = `dispatched ${when} &middot; ${esc(lastRebuild.slug)}`;
+    } else if (lastRebuild.code === "not_configured") {
+      rebuildClass = "paused";
+      rebuildLabel = "not configured";
+      rebuildDetail = "Set GITHUB_REPO and GITHUB_TOKEN to rebuild automatically.";
+    } else {
+      rebuildClass = "off";
+      rebuildLabel = "failed";
+      rebuildDetail = `${esc(lastRebuild.error ?? "unknown error")} &middot; ${when} &middot; ${esc(lastRebuild.slug)}`;
+    }
+  }
 
   const totalPending = pendingCountResult?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalPending / PAGE_SIZE));
@@ -87,6 +112,10 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
   .on { color: #4caf50; }
   .off { color: #f44336; }
   .paused { color: #ff9800; }
+  .muted { color: #888; }
+  .setting-detail { font-size: 0.8rem; color: #888; margin-top: 0.25rem; max-width: 340px; }
+  .rebuild-form { margin-top: 0.4rem; }
+  .rebuild { color: #4da6ff; }
   table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
   th { text-align: left; padding: 0.5rem; border-bottom: 1px solid #333; color: #888; font-weight: normal; }
   td { padding: 0.5rem; border-bottom: 1px solid #1a1a1a; }
@@ -124,6 +153,12 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
     <div class="setting-label">Moderation</div>
     <div class="setting-value">${aiModEnabled ? "AI decides (fail-closed)" : esc(env.MODERATION === "on" ? "manual review" : "auto-approve")}</div>
   </div>
+  <div class="setting">
+    <div class="setting-label">Rebuild pipeline</div>
+    <div class="setting-value ${rebuildClass}">${rebuildLabel}</div>
+    <div class="setting-detail">${rebuildDetail}</div>
+    <form method="POST" action="/admin/rebuild" class="rebuild-form"><input type="hidden" name="slug" value="all"><button type="submit" class="rebuild action-btn">rebuild now</button></form>
+  </div>
 </div>
 
 <div class="stats">
@@ -159,8 +194,8 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 <table>
   <tr><th>Author</th><th>Comment</th><th>Page</th><th>Date</th><th>Actions</th></tr>
   ${pending.map((c) => `<tr>
-    <td>${esc(c.author)}</td>
-    <td class="comment-body">${esc(c.body)}</td>
+    <td>${esc(unescapeHtml(c.author))}</td>
+    <td class="comment-body">${esc(unescapeHtml(c.body))}</td>
     <td>${esc(c.slug)}</td>
     <td>${c.created_at.slice(0, 10)}</td>
     <td class="actions">
@@ -176,8 +211,8 @@ export async function handleDashboard(request: Request, env: Env): Promise<Respo
 <table>
   <tr><th>Author</th><th>Content</th><th>Date</th></tr>
   ${recentSpam.map((c) => `<tr>
-    <td>${esc(c.author)}</td>
-    <td class="spam-body">${esc(c.body)}</td>
+    <td>${esc(unescapeHtml(c.author))}</td>
+    <td class="spam-body">${esc(unescapeHtml(c.body))}</td>
     <td>${c.created_at.slice(0, 10)}</td>
   </tr>`).join("\n  ")}
   ${recentSpam.length === 0 ? "<tr><td colspan=3>No spam caught yet</td></tr>" : ""}

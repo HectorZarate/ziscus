@@ -321,3 +321,65 @@ describe("GET /admin/dashboard", () => {
     });
   });
 });
+
+describe("dashboard rebuild pipeline card", () => {
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM comments").run();
+    await env.DB.prepare("DELETE FROM meta").run();
+  });
+
+  async function dashboardHtml(): Promise<string> {
+    const res = await SELF.fetch("https://test.example.com/admin/dashboard", ADMIN_AUTH);
+    expect(res.status).toBe(200);
+    return res.text();
+  }
+
+  it("shows 'never run' before any dispatch attempt, with a rebuild-now button", async () => {
+    const html = await dashboardHtml();
+    expect(html).toContain("Rebuild pipeline");
+    expect(html).toContain("never run");
+    expect(html).toContain('action="/admin/rebuild"');
+  });
+
+  it("shows the failure reason when the last dispatch was rejected", async () => {
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('last_rebuild_result', ?)").bind(JSON.stringify({
+      dispatched: false, debounced: false, slug: "landing", at: "2026-08-26T17:03:00.000Z",
+      status: 401, code: "github_rejected", error: "GitHub 401: Bad credentials",
+    })).run();
+    const html = await dashboardHtml();
+    expect(html).toContain(">failed<");
+    expect(html).toContain("GitHub 401: Bad credentials");
+    expect(html).toContain("2026-08-26 17:03 UTC");
+  });
+
+  it("shows ok after a successful dispatch", async () => {
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('last_rebuild_result', ?)").bind(JSON.stringify({
+      dispatched: true, debounced: false, slug: "landing", at: "2026-08-26T17:03:00.000Z", status: 204,
+    })).run();
+    const html = await dashboardHtml();
+    expect(html).toContain(">ok<");
+    expect(html).toContain("dispatched 2026-08-26 17:03 UTC");
+  });
+
+  it("shows not configured when GitHub is not wired up", async () => {
+    await env.DB.prepare("INSERT INTO meta (key, value) VALUES ('last_rebuild_result', ?)").bind(JSON.stringify({
+      dispatched: false, debounced: false, slug: "landing", at: "2026-08-26T17:03:00.000Z",
+      code: "not_configured", error: "GITHUB_TOKEN or GITHUB_REPO not configured",
+    })).run();
+    const html = await dashboardHtml();
+    expect(html).toContain(">not configured<");
+  });
+
+  it("renders stored (already-escaped) comment text exactly once", async () => {
+    await env.DB.prepare(
+      "INSERT INTO comments (id, slug, author, body, status) VALUES ('e1', 'post-a', 'Bob &quot;B&quot;', 'Tom &amp; Jerry &lt;3', 'pending')",
+    ).run();
+    const html = await dashboardHtml();
+    expect(html).toContain("Bob &quot;B&quot;");
+    expect(html).toContain("Tom &amp; Jerry &lt;3");
+    expect(html).not.toContain("&amp;quot;");
+    expect(html).not.toContain("&amp;amp;");
+    expect(html).not.toContain("<3");
+  });
+});

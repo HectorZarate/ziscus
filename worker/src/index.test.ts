@@ -1687,3 +1687,81 @@ describe("security headers", () => {
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });
+
+// ---------------------------------------------------------------------------
+// POST /admin/rebuild — operator probe for the rebuild pipeline
+// ---------------------------------------------------------------------------
+
+describe("POST /admin/rebuild", () => {
+  const AUTH = { Authorization: `Bearer ${env.ADMIN_SECRET}` };
+
+  beforeEach(async () => {
+    await initDb();
+    await env.DB.prepare("DELETE FROM meta").run();
+    await env.DB.prepare("DELETE FROM mod_log").run();
+  });
+
+  it("returns 401 without auth", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/rebuild", { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 503 not_configured when GITHUB_TOKEN is unset (the test env)", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/rebuild", { method: "POST", headers: AUTH });
+    expect(res.status).toBe(503);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body).toMatchObject({ ok: false, dispatched: false, slug: "all", code: "not_configured" });
+  });
+
+  it("accepts a slug via JSON", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/rebuild", {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: "landing" }),
+    });
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.slug).toBe("landing");
+  });
+
+  it("rejects an invalid slug", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/rebuild", {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: "../etc" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects malformed JSON", async () => {
+    const res = await SELF.fetch("https://test.example.com/admin/rebuild", {
+      method: "POST",
+      headers: { ...AUTH, "Content-Type": "application/json" },
+      body: "{",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("sends the dashboard's form POST back to the dashboard even when the dispatch fails", async () => {
+    const form = new URLSearchParams({ slug: "all" });
+    const res = await SELF.fetch("https://test.example.com/admin/rebuild", {
+      method: "POST",
+      headers: { ...AUTH, Accept: "text/html", "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+      redirect: "manual",
+    });
+    expect(res.status).toBe(303);
+    expect(res.headers.get("Location")).toBe("/admin/dashboard");
+  });
+
+  it("GET /admin/stats exposes the last rebuild outcome", async () => {
+    const before = await SELF.fetch("https://test.example.com/admin/stats", { headers: AUTH });
+    expect((await before.json() as { rebuild: unknown }).rebuild).toBeNull();
+
+    await SELF.fetch("https://test.example.com/admin/rebuild", { method: "POST", headers: AUTH });
+
+    const after = await SELF.fetch("https://test.example.com/admin/stats", { headers: AUTH });
+    const stats = await after.json() as { approved: number; rebuild: { code: string; slug: string } };
+    expect(stats.rebuild).toMatchObject({ code: "not_configured", slug: "all" });
+    expect(typeof stats.approved).toBe("number");
+  });
+});

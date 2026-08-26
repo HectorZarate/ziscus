@@ -1,25 +1,64 @@
 import type { Env } from "./types.js";
 import { requireAuth } from "./auth.js";
 import { logModAction } from "./mod-log.js";
-import { escHtml } from "./submit.js";
+import { escHtml } from "./html.js";
+import { triggerRebuild, getLastRebuildResult } from "./debounce.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-/** GET /admin/stats — counts grouped by status */
+/** GET /admin/stats — counts grouped by status, plus the last rebuild-dispatch outcome */
 export async function handleGetStats(request: Request, env: Env): Promise<Response> {
   const authErr = requireAuth(request, env);
   if (authErr) return authErr;
 
-  const { results } = await env.DB.prepare(
-    "SELECT status, COUNT(*) as count FROM comments GROUP BY status",
-  ).all<{ status: string; count: number }>();
+  const [{ results }, rebuild] = await Promise.all([
+    env.DB.prepare("SELECT status, COUNT(*) as count FROM comments GROUP BY status")
+      .all<{ status: string; count: number }>(),
+    getLastRebuildResult(env.DB),
+  ]);
 
   const stats: Record<string, number> = { pending: 0, approved: 0, rejected: 0, spam: 0 };
   for (const row of results ?? []) {
     stats[row.status] = row.count;
   }
 
-  return new Response(JSON.stringify(stats), { status: 200, headers: JSON_HEADERS });
+  return new Response(JSON.stringify({ ...stats, rebuild }), { status: 200, headers: JSON_HEADERS });
+}
+
+/**
+ * POST /admin/rebuild — force a repository_dispatch (bypassing the debounce
+ * window) and report GitHub's verdict. This is the operator's "is the rebuild
+ * pipeline healthy?" probe: a rejected token surfaces here as a 502 with
+ * GitHub's message instead of failing silently in the background.
+ *
+ * Accepts JSON `{ slug }` or a form field `slug` (the dashboard button).
+ * Defaults to "all".
+ */
+export async function handleRebuild(request: Request, env: Env): Promise<Response> {
+  const authErr = requireAuth(request, env);
+  if (authErr) return authErr;
+
+  let slug = "all";
+  const contentType = request.headers.get("Content-Type") ?? "";
+  if (contentType.includes("application/json")) {
+    let body: { slug?: unknown };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+    if (typeof body.slug === "string" && body.slug) slug = body.slug;
+  } else if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
+    const field = (await request.formData()).get("slug");
+    if (typeof field === "string" && field) slug = field;
+  }
+  if (!/^[a-z0-9-]{1,255}$/.test(slug)) {
+    return new Response("Invalid slug", { status: 400 });
+  }
+
+  const result = await triggerRebuild(env.DB, env, slug, { force: true, actor: "admin" });
+  const status = result.dispatched ? 200 : result.code === "not_configured" ? 503 : 502;
+  return new Response(JSON.stringify({ ok: result.dispatched, ...result }), { status, headers: JSON_HEADERS });
 }
 
 /** GET /admin/comments — filtered list with pagination */

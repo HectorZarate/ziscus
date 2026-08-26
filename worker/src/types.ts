@@ -28,6 +28,26 @@ export interface Env {
   MAX_SLUG_LENGTH?: string;
 }
 
+/**
+ * Outcome of one rebuild-dispatch attempt. Also persisted as JSON in
+ * `meta.last_rebuild_result` so the dashboard and /admin/stats can show it.
+ */
+export interface RebuildResult {
+  /** True if GitHub accepted the repository_dispatch (HTTP 204). */
+  dispatched: boolean;
+  /** True if skipped because another dispatch fired within the debounce window. */
+  debounced: boolean;
+  slug: string;
+  /** ISO-8601 timestamp of the attempt. */
+  at: string;
+  /** GitHub's HTTP status for the dispatch call, when one was made. */
+  status?: number;
+  /** Machine-readable failure class. Absent on success or debounce. */
+  code?: "not_configured" | "github_rejected" | "network";
+  /** Human-readable failure reason. Absent on success or debounce. */
+  error?: string;
+}
+
 export interface Comment {
   id: string;
   slug: string;

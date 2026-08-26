@@ -1,9 +1,14 @@
 import type { Env } from "./types.js";
+import { escHtml, unescapeHtml } from "./html.js";
 
 /** Max comments to query for the HTMLRewriter response. */
 const REWRITER_COMMENT_LIMIT = 200;
 
-/** Render a single comment as HTML */
+/**
+ * Render a single comment as HTML. Stored text is HTML-escaped (see html.ts);
+ * `escHtml(unescapeHtml(...))` renders it exactly once, and stays safe even if
+ * a row bypassed the storage invariant.
+ */
 function renderComment(author: string, body: string, createdAt: string, timeZone: string = "UTC"): string {
   const date = new Date(createdAt);
   const formatted = date.toLocaleDateString("en-US", {
@@ -15,10 +20,10 @@ function renderComment(author: string, body: string, createdAt: string, timeZone
 
   return `<article class="comment">
         <header class="comment-header">
-          <strong class="comment-author">${author}</strong>
+          <strong class="comment-author">${escHtml(unescapeHtml(author))}</strong>
           <time datetime="${createdAt}">${formatted}</time>
         </header>
-        <p class="comment-body">${body}</p>
+        <p class="comment-body">${escHtml(unescapeHtml(body))}</p>
       </article>`;
 }
 

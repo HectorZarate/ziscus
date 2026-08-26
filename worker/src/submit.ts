@@ -4,6 +4,7 @@ import { triggerRebuild } from "./debounce.js";
 import { classifyComment } from "./classify.js";
 import { logModAction } from "./mod-log.js";
 import { structuralFilter } from "./structural-filter.js";
+import { escHtml } from "./html.js";
 
 /** Resolve runtime limit from env, falling back to the provided default. */
 function limit(envValue: string | undefined, defaultValue: number): number {
@@ -20,17 +21,6 @@ async function hashIp(ip: string): Promise<string> {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
     .slice(0, 16);
-}
-
-/** Escape HTML to prevent stored XSS */
-export function escHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/\0/g, ""); // strip null bytes
 }
 
 /**

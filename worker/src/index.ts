@@ -25,6 +25,7 @@ import {
   handleExport,
   handleImport,
   handleGdprDelete,
+  handleRebuild,
 } from "./admin-api.js";
 
 /**
@@ -33,10 +34,17 @@ import {
  * JSON result. A browser navigation sends an `Accept` header containing
  * `text/html`; fetch/CLI callers send a wildcard or JSON Accept. (We no longer
  * key off a `?token=` param — the secret never appears in a URL.)
+ *
+ * `alsoOn` widens the set of statuses that redirect (e.g. a failed rebuild is
+ * still "done" from the browser's point of view — the dashboard shows why).
  */
-function dashboardRedirect(request: Request, res: Response): Response {
+function dashboardRedirect(
+  request: Request,
+  res: Response,
+  opts: { alsoOn?: (status: number) => boolean } = {},
+): Response {
   const accept = request.headers.get("Accept") ?? "";
-  if (res.ok && accept.includes("text/html")) {
+  if ((res.ok || opts.alsoOn?.(res.status)) && accept.includes("text/html")) {
     return new Response(null, {
       status: 303,
       headers: { Location: "/admin/dashboard" },
@@ -137,6 +145,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (path === "/admin/export" && request.method === "GET") return handleExport(request, env);
     if (path === "/admin/import" && request.method === "POST") return handleImport(request, env);
     if (path === "/admin/bulk/approve" && request.method === "POST") return handleBulkApprove(request, env);
+    if (path === "/admin/rebuild" && request.method === "POST") {
+      const res = await handleRebuild(request, env);
+      return dashboardRedirect(request, res, { alsoOn: (s) => s >= 500 });
+    }
 
     if (path === "/admin/classify" && request.method === "POST") {
       const authErr = requireAuth(request, env);

@@ -4,7 +4,7 @@ import type { Env } from "./types.js";
 export async function logModAction(
   db: D1Database,
   action: string,
-  actor: "ai" | "admin",
+  actor: "ai" | "admin" | "system",
   opts?: { commentId?: string; slug?: string; reason?: string; metadata?: Record<string, unknown> },
 ): Promise<void> {
   await db.prepare(
