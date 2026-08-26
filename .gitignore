@@ -5,3 +5,5 @@ dist/
 .env
 *.log
 .gstack/
+site/lobster.json
+.DS_Store
