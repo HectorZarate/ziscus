@@ -1,7 +1,7 @@
 {
   "name": "ziscus",
   "version": "0.7.0",
-  "description": "Zero-JavaScript anonymous comment system — embeddable HTML/CSS generators for static sites",
+  "description": "Zero-JavaScript anonymous comment system \u2014 Cloudflare Worker, static HTML/CSS renderers, and CLI for static sites",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,12 +10,18 @@
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js",
+      "default": "./dist/worker.js"
+    },
+    "./schema.sql": "./dist/schema.sql"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "pnpm --filter ziscus-worker build && tsdown && node scripts/bundle-worker.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -29,7 +35,9 @@
     "anonymous",
     "static-site",
     "moderation",
-    "anti-spam"
+    "anti-spam",
+    "cloudflare-workers",
+    "d1"
   ],
   "repository": {
     "type": "git",
@@ -47,5 +55,13 @@
   },
   "dependencies": {
     "commander": "^14.0.3"
+  },
+  "peerDependencies": {
+    "@cloudflare/workers-types": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/workers-types": {
+      "optional": true
+    }
   }
 }

@@ -1,7 +1,11 @@
 export interface Env {
   DB: D1Database;
-  /** Static asset handler — serves the landing site for non-API routes */
-  ASSETS: Fetcher;
+  /**
+   * Static asset handler — present when the Worker also serves the site
+   * (`[assets]` in wrangler.toml). Optional: without it the Worker is API-only
+   * and the instant "see your own comment" preview is unavailable.
+   */
+  ASSETS?: Fetcher;
   /** Workers AI binding for ai-mod spam classification. Optional. */
   AI_MOD?: Ai;
   /** Comma-separated list of allowed origin hostnames for CSRF protection */

@@ -40,6 +40,7 @@ export async function serveWithFreshComments(
   request: Request,
   env: Env,
 ): Promise<Response> {
+  if (!env.ASSETS) return redirect(redirectUrl);
   try {
     const pageUrl = new URL(
       redirectUrl.startsWith("/") ? redirectUrl : new URL(redirectUrl).pathname || "/",

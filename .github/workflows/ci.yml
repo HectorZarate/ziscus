@@ -18,3 +18,4 @@ jobs:
       - run: cd embed && pnpm test
       - run: cd worker && pnpm typecheck
       - run: cd worker && pnpm test
+      - run: cd embed && pnpm build && npm pack --dry-run
