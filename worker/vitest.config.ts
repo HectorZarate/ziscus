@@ -9,6 +9,10 @@ export default defineWorkersConfig({
           d1Databases: ["DB"],
           bindings: {
             ADMIN_SECRET: "test-admin-secret",
+            ALLOWED_ORIGINS: "ziscus.com,ziscus.hdz.workers.dev",
+            MODERATION: "off",
+            RATE_LIMIT: "30",
+            GITHUB_REPO: "HectorZarate/ziscus",
           },
         },
       },

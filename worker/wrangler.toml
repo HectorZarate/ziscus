@@ -1,29 +1,28 @@
+# Dev/test config for this repository. Consumers don't use this file — they
+# write their own wrangler.toml against the published `ziscus/worker` bundle
+# (see README → "1. Deploy the Worker"). ziscus.com's real config lives in
+# its own private site repo.
 name = "ziscus"
 main = "src/index.ts"
 compatibility_date = "2025-09-27"
 
-# Static assets — serves the landing site at ziscus.com
-# API routes (/submit, /comments/*, /admin/*) are handled by the Worker
-# Everything else falls through to static files from site/_site/
+# Tiny fixture site so the flash-cookie / paused-slug HTMLRewriter paths are
+# exercised end-to-end in tests. Consumers point this at their real build output.
 [assets]
-directory = "../site/_site"
+directory = "test/site"
 binding = "ASSETS"
-# Let the Worker handle all requests — ASSETS only serves via env.ASSETS.fetch().
-# `run_worker_first = true` replaces the old `serve_directly = false` (removed in
-# wrangler 4.87); without it the asset server answers GET / directly and the
-# Worker's flash-cookie / pause HTMLRewriter paths never run.
 run_worker_first = true
 
 [[d1_databases]]
 binding = "DB"
 database_name = "ziscus-comments"
-database_id = "aa367a7e-fa94-4e0a-bcd6-11af1071545c"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 
 [vars]
-ALLOWED_ORIGINS = "ziscus.com,ziscus.hdz.workers.dev"
+ALLOWED_ORIGINS = "example.com"
 MODERATION = "off"
 RATE_LIMIT = "30"
-GITHUB_REPO = "HectorZarate/ziscus"
+GITHUB_REPO = "you/your-site-repo"
 
 [ai]
 binding = "AI_MOD"
