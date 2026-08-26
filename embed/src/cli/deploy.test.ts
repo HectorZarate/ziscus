@@ -8,7 +8,16 @@ import {
   setWranglerSecret,
   deployWorker,
   setExec,
+  resolveWorkerDir,
+  resolveSchemaPath,
+  detectGitHubRepo,
+  renderWranglerToml,
+  writeDatabaseId,
+  scaffoldWorker,
 } from "./deploy.js";
+import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const mockExec = vi.fn();
 
@@ -121,5 +130,80 @@ describe("deployWorker", () => {
   it("throws on deploy failure", () => {
     mockExec.mockImplementation(() => { throw new Error("deploy failed"); });
     expect(() => deployWorker("./worker")).toThrow();
+  });
+});
+
+describe("dependency-model scaffolding", () => {
+  const OPTS = { name: "ziscus-comments", dbName: "ziscus-comments", dbId: "1111-2222", siteHost: "myblog.com", githubRepo: "me/blog" };
+  let dir: string;
+  let cwd: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), "ziscus-deploy-"));
+    cwd = process.cwd();
+    process.chdir(dir);
+  });
+  afterEach(async () => {
+    process.chdir(cwd);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it("resolveWorkerDir: explicit > cloned worker/ > project root", async () => {
+    expect(resolveWorkerDir("custom")).toBe("custom");
+    expect(resolveWorkerDir()).toBe(".");
+    await mkdir("worker"); await writeFile("worker/wrangler.toml", "");
+    expect(resolveWorkerDir()).toBe("worker");
+  });
+
+  it("resolveSchemaPath: cloned repo copy, else the schema shipped in the package", async () => {
+    expect(resolveSchemaPath(".")).toMatch(/schema\.sql$/);
+    await mkdir("worker/src", { recursive: true }); await writeFile("worker/src/schema.sql", "");
+    expect(resolveSchemaPath("worker")).toBe(join("worker", "src", "schema.sql"));
+  });
+
+  it("detectGitHubRepo parses ssh and https remotes, null otherwise", () => {
+    mockExec.mockReturnValue(Buffer.from("git@github.com:me/blog.git\n"));
+    expect(detectGitHubRepo()).toBe("me/blog");
+    mockExec.mockReturnValue(Buffer.from("https://github.com/me/blog\n"));
+    expect(detectGitHubRepo()).toBe("me/blog");
+    mockExec.mockReturnValue(Buffer.from("https://gitlab.com/me/blog.git\n"));
+    expect(detectGitHubRepo()).toBeNull();
+    mockExec.mockImplementation(() => { throw new Error("not a git repo"); });
+    expect(detectGitHubRepo()).toBeNull();
+  });
+
+  it("renderWranglerToml wires the Worker to ziscus/worker with the created database", () => {
+    const toml = renderWranglerToml(OPTS);
+    expect(toml).toContain('main = "worker.ts"');
+    expect(toml).toContain('database_id = "1111-2222"');
+    expect(toml).toContain('ALLOWED_ORIGINS = "myblog.com"');
+    expect(toml).toContain('GITHUB_REPO = "me/blog"');
+    expect(toml).toContain("# [assets]");
+  });
+
+  it("writeDatabaseId replaces the first database_id and reports whether it did", async () => {
+    await writeFile("wrangler.toml", 'name = "x"\n[[d1_databases]]\nbinding = "DB"\ndatabase_id = "REPLACE_ME"\n');
+    expect(writeDatabaseId("wrangler.toml", "abc")).toBe(true);
+    expect(await readFile("wrangler.toml", "utf8")).toContain('database_id = "abc"');
+    await writeFile("no-id.toml", 'name = "x"\n');
+    expect(writeDatabaseId("no-id.toml", "abc")).toBe(false);
+  });
+
+  it("scaffoldWorker creates wrangler.toml + worker.ts in an empty project", async () => {
+    const created = scaffoldWorker(".", OPTS);
+    expect(created.sort()).toEqual(["worker.ts", "wrangler.toml"]);
+    expect(await readFile("worker.ts", "utf8")).toBe('export { default } from "ziscus/worker";\n');
+    expect(await readFile("wrangler.toml", "utf8")).toContain('database_id = "1111-2222"');
+  });
+
+  it("scaffoldWorker only patches database_id when wrangler.toml exists, and never overwrites an entry", async () => {
+    await writeFile("wrangler.toml", 'name = "mine"\nmain = "src/index.ts"\ndatabase_id = "old"\n');
+    await mkdir("src"); await writeFile("src/index.ts", "// mine");
+    const created = scaffoldWorker(".", OPTS);
+    expect(created).toEqual([]);
+    const toml = await readFile("wrangler.toml", "utf8");
+    expect(toml).toContain('name = "mine"');
+    expect(toml).toContain('database_id = "1111-2222"');
+    expect(await readFile("src/index.ts", "utf8")).toBe("// mine");
   });
 });

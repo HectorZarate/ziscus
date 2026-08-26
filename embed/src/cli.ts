@@ -21,6 +21,10 @@ import {
   generateSecret,
   setWranglerSecret,
   deployWorker,
+  resolveWorkerDir,
+  resolveSchemaPath,
+  scaffoldWorker,
+  detectGitHubRepo,
 } from "./cli/deploy.js";
 
 // Auto-load .env from project root (does not override existing vars)
@@ -69,7 +73,8 @@ program
   .option("--ssg <name>", "Static site generator (hugo, astro, eleventy, jekyll, nextjs)")
   .option("--site-url <url>", "Your site URL (e.g. https://myblog.com)")
   .option("--db-name <name>", "D1 database name", "ziscus-comments")
-  .option("--worker-dir <path>", "Path to worker directory", "./worker")
+  .option("--worker-name <name>", "Worker name on Cloudflare", "ziscus-comments")
+  .option("--worker-dir <path>", "Directory holding wrangler.toml (default: ./worker if present, else .)")
   .action(async (opts) => {
     console.log("Deploying ziscus...\n");
 
@@ -91,7 +96,9 @@ program
     }
 
     // Step 2: Gather inputs
-    let { ssg, siteUrl, dbName, workerDir } = opts;
+    let { ssg, siteUrl } = opts;
+    const { dbName, workerName } = opts;
+    const workerDir = resolveWorkerDir(opts.workerDir);
     const validSSGs = ["hugo", "astro", "eleventy", "jekyll", "nextjs"];
 
     if (!ssg || !siteUrl) {
@@ -117,8 +124,18 @@ program
       process.exit(1);
     }
 
+    // Step 3b: Make the project deployable (dependency model: wrangler.toml + worker.ts)
+    let siteHost = siteUrl;
+    try { siteHost = new URL(siteUrl).hostname; } catch { /* keep as typed */ }
+    const created = scaffoldWorker(workerDir, {
+      name: workerName, dbName, dbId, siteHost,
+      githubRepo: detectGitHubRepo() ?? "you/your-site-repo",
+    });
+    for (const f of created) console.log(`✓ Created ${f}`);
+    if (created.length === 0) console.log(`✓ wrangler.toml database_id set`);
+
     // Step 4: Apply schema
-    const schemaPath = `${workerDir}/src/schema.sql`;
+    const schemaPath = resolveSchemaPath(workerDir);
     try {
       console.log("Applying database schema...");
       applySchema(dbName, schemaPath);
@@ -132,10 +149,10 @@ program
     const adminSecret = generateSecret();
     try {
       console.log("Setting admin secret...");
-      setWranglerSecret("ADMIN_SECRET", adminSecret);
+      setWranglerSecret("ADMIN_SECRET", adminSecret, workerDir);
       console.log("✓ Admin secret set");
     } catch (err) {
-      console.error("Failed to set secret. Run manually: wrangler secret put ADMIN_SECRET");
+      console.error(`Failed to set secret. Run manually: cd ${workerDir} && wrangler secret put ADMIN_SECRET`);
       process.exit(1);
     }
 
@@ -170,6 +187,7 @@ program
     console.log(`  Worker:  ${workerUrl || "(check wrangler output)"}`);
     console.log(`  Secret:  saved to .env`);
     console.log(`  AI mod:  npx ziscus ai-mod enable`);
+    console.log(`  Rebuild: set GITHUB_REPO in wrangler.toml, then: cd ${workerDir} && wrangler secret put GITHUB_TOKEN`);
     console.log(`\nBack up your admin secret somewhere safe.`);
     console.log(`Cloudflare secrets are write-only — you cannot retrieve them later.`);
   });
@@ -569,12 +587,12 @@ const aiMod = program
 aiMod
   .command("enable")
   .description("Add Workers AI spam classification to your Worker")
-  .option("--wrangler <path>", "Path to wrangler.toml", "./worker/wrangler.toml")
+  .option("--wrangler <path>", "Path to wrangler.toml (default: ./worker/wrangler.toml if present, else ./wrangler.toml)")
   .option("--no-deploy", "Skip deployment after adding binding")
   .action(async (opts) => {
     const result = await runAiModEnable({
       dir: ".",
-      wranglerPath: opts.wrangler,
+      wranglerPath: opts.wrangler ?? `${resolveWorkerDir()}/wrangler.toml`,
       deploy: opts.deploy !== false,
     });
 
@@ -591,7 +609,7 @@ aiMod
     console.log("✓ Added [ai] binding to wrangler.toml");
     console.log("\nNote: Workers AI free tier supports ~3,000 classifications/day.");
     console.log("For higher volume: Workers Paid ($5/mo). Without AI: unlimited, no cost.");
-    console.log("\nDeploy your worker to activate: cd worker && wrangler deploy");
+    console.log("\nDeploy your worker to activate: wrangler deploy");
   });
 
 aiMod
