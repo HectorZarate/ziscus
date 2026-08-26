@@ -83,6 +83,52 @@ describe("runExport", () => {
     expect(csv).toContain("hdz");
   });
 
+  describe("redactIpHashes option", () => {
+    const withGdpr = {
+      ...MOCK_EXPORT,
+      modLog: [
+        ...MOCK_EXPORT.modLog,
+        { id: "l2", action: "gdpr_delete", actor: "admin", comment_id: null, slug: null, reason: "GDPR erasure for ip_hash abc123def4567890: 2 comments, 0 rate_limits, 1 bans deleted", metadata: "{}", created_at: "2026-04-07T01:00:00Z" },
+      ],
+    };
+
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(withGdpr), { status: 200 }),
+      ));
+    });
+
+    it("strips ip_hash from comments.json and banned-ips.json", async () => {
+      await runExport({ endpoint: "https://e.com", secret: "s", outputDir: dir, redactIpHashes: true });
+      const comments = JSON.parse(await readFile(join(dir, "comments.json"), "utf-8"));
+      const bans = JSON.parse(await readFile(join(dir, "banned-ips.json"), "utf-8"));
+      expect(comments).toHaveLength(2);
+      expect(comments.every((c: Record<string, unknown>) => !("ip_hash" in c))).toBe(true);
+      expect(comments[0]).toMatchObject({ id: "c1", author: "hdz", status: "approved" });
+      expect(bans).toEqual([{ reason: "spam", banned_at: "2026-04-06T01:00:00Z" }]);
+    });
+
+    it("scrubs ip_hash mentions from mod-log reasons", async () => {
+      await runExport({ endpoint: "https://e.com", secret: "s", outputDir: dir, redactIpHashes: true });
+      const log = JSON.parse(await readFile(join(dir, "mod-log.json"), "utf-8"));
+      expect(log[1].reason).toBe("GDPR erasure for ip_hash [redacted]: 2 comments, 0 rate_limits, 1 bans deleted");
+      expect(JSON.stringify(log)).not.toContain("abc123def4567890");
+    });
+
+    it("drops the ip_hash column from CSV output", async () => {
+      await runExport({ endpoint: "https://e.com", secret: "s", outputDir: dir, format: "csv", redactIpHashes: true });
+      const csv = await readFile(join(dir, "comments.csv"), "utf-8");
+      expect(csv.split("\n")[0]).not.toContain("ip_hash");
+      expect(csv).not.toContain("abc");
+    });
+
+    it("keeps ip_hash by default", async () => {
+      await runExport({ endpoint: "https://e.com", secret: "s", outputDir: dir });
+      const comments = JSON.parse(await readFile(join(dir, "comments.json"), "utf-8"));
+      expect(comments[0].ip_hash).toBe("abc");
+    });
+  });
+
   it("handles auth failure with clear error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
       new Response("Unauthorized", { status: 401 }),

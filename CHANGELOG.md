@@ -13,6 +13,9 @@
 - **Dashboard "Rebuild pipeline" card** with the last outcome and a *rebuild now* button; `GET /admin/stats` gained a `rebuild` field.
 - **Workflow**: deploys the Worker after each bake (`cloudflare/wrangler-action`), runs daily as a safety net, supports manual `workflow_dispatch`, and serializes runs with a concurrency group. Fails loudly if `CLOUDFLARE_API_TOKEN` is missing instead of silently leaving the site stale.
 
+### Security
+- **Backups no longer publish commenter IPs**: `ziscus export --redact-ip` strips every `ip_hash` (an unsalted 64-bit prefix of SHA-256 over the raw IP — reversible in seconds over IPv4) from comments, bans, and mod-log reasons, and the rebuild workflow uses it. The workflow's export step had never actually run before 2026-08-26 (its secret was never set); the one unredacted `backups/` commit it produced was removed.
+
 ### Housekeeping
 - `site/lobster.json` (contains a long-rotated admin secret) is untracked and gitignored — rsslobster treats it as a private file.
 - Escaping helpers consolidated in `worker/src/html.ts`; CLI `--version` now matches `package.json`.

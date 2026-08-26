@@ -6,9 +6,16 @@ export interface ExportOptions {
   secret: string;
   outputDir: string;
   format?: "json" | "csv";
+  /**
+   * Strip every `ip_hash` before writing. ip_hash is an unsalted 64-bit prefix
+   * of SHA-256(ip) — the IPv4 space is only 2^32, so a published hash is a
+   * published IP. Use this whenever the export lands somewhere public (e.g.
+   * committed to a repo by the rebuild workflow).
+   */
+  redactIpHashes?: boolean;
 }
 
-interface ExportData {
+export interface ExportData {
   comments: Record<string, unknown>[];
   modLog: Record<string, unknown>[];
   bans: Record<string, unknown>[];
@@ -29,7 +36,8 @@ export async function runExport(options: ExportOptions): Promise<void> {
     throw new Error(`Export failed: ${res.status} ${await res.text()}`);
   }
 
-  const data = (await res.json()) as ExportData;
+  const raw = (await res.json()) as ExportData;
+  const data = options.redactIpHashes ? redactIpHashes(raw) : raw;
 
   await mkdir(outputDir, { recursive: true });
 
@@ -43,6 +51,22 @@ export async function runExport(options: ExportOptions): Promise<void> {
 
   await writeFile(join(outputDir, "banned-ips.json"), JSON.stringify(data.bans, null, 2) + "\n");
   await writeFile(join(outputDir, "meta.json"), JSON.stringify(data.meta, null, 2) + "\n");
+}
+
+/** Remove `ip_hash` fields and scrub ip_hash mentions from mod-log reasons. */
+export function redactIpHashes(data: ExportData): ExportData {
+  const strip = (rows: Record<string, unknown>[]) =>
+    rows.map(({ ip_hash: _omit, ...rest }) => rest);
+  return {
+    comments: strip(data.comments),
+    bans: strip(data.bans),
+    modLog: data.modLog.map((row) =>
+      typeof row.reason === "string"
+        ? { ...row, reason: row.reason.replace(/ip_hash [0-9a-f]+/g, "ip_hash [redacted]") }
+        : row,
+    ),
+    meta: data.meta,
+  };
 }
 
 function toCsv(rows: Record<string, unknown>[]): string {

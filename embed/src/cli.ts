@@ -278,6 +278,7 @@ program
   .option("--output <dir>", "Output directory", "backups")
   .option("--format <fmt>", "Output format: json or csv", "json")
   .option("--endpoint <url>", "Worker endpoint (reads from ziscus.config.json if not set)")
+  .option("--redact-ip", "Strip ip_hash from every record — required when the export is committed to a public repo (a published ip_hash is a published IP)")
   .action(async (opts) => {
     const secret = process.env.ZISCUS_ADMIN_SECRET;
     if (!secret) {
@@ -296,8 +297,8 @@ program
       }
     }
 
-    await runExport({ endpoint, secret, outputDir: opts.output, format: opts.format });
-    console.log(`✓ Exported to ${opts.output}/`);
+    await runExport({ endpoint, secret, outputDir: opts.output, format: opts.format, redactIpHashes: !!opts.redactIp });
+    console.log(`✓ Exported to ${opts.output}/${opts.redactIp ? " (ip_hash redacted)" : ""}`);
   });
 
 program

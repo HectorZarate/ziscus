@@ -52,9 +52,14 @@ jobs:
       - name: Regenerate site
         run: cd site && rsslobster regenerate
 
-      - name: Export backup
+      # Uses the repo's own CLI build (not the npm release) so the workflow
+      # never lags a fix. --redact-ip: this repo is public and an ip_hash is
+      # a 64-bit prefix of SHA-256(ip) — trivially reversible over IPv4.
+      - name: Export backup (ip_hash redacted)
         continue-on-error: true
-        run: npx ziscus export --output backups/ --endpoint https://ziscus.com
+        run: |
+          pnpm --filter ziscus build
+          node embed/dist/cli.js export --output backups/ --endpoint https://ziscus.com --redact-ip
         env:
           ZISCUS_ADMIN_SECRET: ${{ secrets.ZISCUS_ADMIN_SECRET }}
 
