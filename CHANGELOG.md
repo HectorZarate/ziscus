@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.0 — 2026-08-26
+
+### Fixes
+- **Comments invisible on ziscus.com for 8 weeks (P0)**: two compounding failures. (1) The Worker's `GITHUB_TOKEN` stopped being accepted in early July, and `triggerRebuild` neither checked GitHub's response nor logged the failure, so every `repository_dispatch` after June 29 was silently dropped — 13 approved comments never left D1. (2) The rebuild workflow committed the baked HTML to git but never redeployed the Worker, and ziscus.com serves the site from the Worker's static assets, so even a successful bake only reached visitors on the next manual `wrangler deploy`. The flash-cookie path reads D1 live, which is why a commenter saw everything right after posting while everyone else saw the June 29 bake.
+- **Double-escaped comment text**: the Worker stores `author`/`body` HTML-escaped and every renderer escaped again, so a quote rendered as `&amp;quot;` on the baked page, in the dashboard, and in the flash preview. `fetchComments()` now decodes the API's entities so the embed renderer escapes exactly once; the Worker's dashboard and flash renderer render stored text through `escHtml(unescapeHtml(…))`.
+
+### Features
+- **Rebuild pipeline is observable**: every dispatch attempt is recorded in `meta.last_rebuild_result`, logged to `mod_log` as `rebuild_dispatched` / `rebuild_failed` (with GitHub's status and message), and printed to `console.error` for `wrangler tail`. A failed dispatch releases the debounce window so the next approval retries immediately.
+- **`POST /admin/rebuild`** forces a dispatch (bypassing the debounce) and returns GitHub's verdict — 200 on success, 502 with GitHub's message when rejected, 503 when `GITHUB_TOKEN`/`GITHUB_REPO` aren't configured.
+- **`npx ziscus rebuild [slug]`** CLI wrapper for the above; exits non-zero and tells you to rotate the token on 401/403/404.
+- **Dashboard "Rebuild pipeline" card** with the last outcome and a *rebuild now* button; `GET /admin/stats` gained a `rebuild` field.
+- **Workflow**: deploys the Worker after each bake (`cloudflare/wrangler-action`), runs daily as a safety net, supports manual `workflow_dispatch`, and serializes runs with a concurrency group. Fails loudly if `CLOUDFLARE_API_TOKEN` is missing instead of silently leaving the site stale.
+
+### Housekeeping
+- `site/lobster.json` (contains a long-rotated admin secret) is untracked and gitignored — rsslobster treats it as a private file.
+- Escaping helpers consolidated in `worker/src/html.ts`; CLI `--version` now matches `package.json`.
+- 372 tests (worker 250, embed 122; up from 228 + 91).
+
 ## 0.6.0 — 2026-06-29
 
 ### Security

@@ -101,6 +101,7 @@ npx ziscus dashboard                  # print the Bearer header + open dashboard
 npx ziscus comments --status pending  # view pending queue
 npx ziscus comments --status spam     # view caught spam
 npx ziscus mod-log                    # moderation audit trail
+npx ziscus rebuild                    # force a site rebuild + prove the GitHub token works
 ```
 
 ![ziscus admin dashboard](site/_site/images/screenshot-dashboard.png)
@@ -155,49 +156,25 @@ cd worker
 wrangler secret put GITHUB_TOKEN
 ```
 
-**Add the workflow** (already included at `.github/workflows/rebuild-comments.yml`):
+**Add the workflow** (already included at `.github/workflows/rebuild-comments.yml`). On every `rebuild-comments` dispatch it regenerates the site, commits `site/_site/`, exports a backup, and **redeploys the Worker** so the freshly baked pages actually reach visitors. It also runs on a daily schedule and has a manual *Run workflow* button.
 
-```yaml
-name: Rebuild comments
-on:
-  repository_dispatch:
-    types: [rebuild-comments]
+**Secrets the workflow needs** (repo → Settings → Secrets and variables → Actions):
 
-permissions:
-  contents: write
+| Secret | Purpose |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Deploys the Worker after each bake. Create at dash.cloudflare.com → My Profile → API Tokens → *Edit Cloudflare Workers* template, and add **D1 → Edit** and **Workers AI → Read** (both bindings are validated at deploy time). |
+| `CLOUDFLARE_ACCOUNT_ID` | Shown on the Workers & Pages overview page. |
+| `ZISCUS_ADMIN_SECRET` | Lets the workflow export a backup to `backups/` on every run. |
 
-jobs:
-  rebuild:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: 10 }
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+> **Why the deploy step exists.** ziscus.com serves its pages from the Worker's static assets (`[assets]` in `wrangler.toml`). A bake that only lands in git is invisible until the Worker is redeployed — comments can sit "published" in the repo for weeks while the live site shows the old bake. If your site is hosted elsewhere (Cloudflare Pages, Netlify, GitHub Pages), your host's deploy-on-push replaces this step.
 
-      - name: Install rsslobster
-        run: |
-          git clone --depth 1 https://github.com/HectorZarate/rsslobster.git /tmp/rsslobster
-          cd /tmp/rsslobster
-          pnpm install --frozen-lockfile
-          pnpm build
-          pnpm link --global
+**Is the pipeline healthy?** Every dispatch attempt is recorded, so a dead token can't fail silently:
 
-      - name: Regenerate site
-        run: cd site && rsslobster regenerate
+- `npx ziscus rebuild` — forces a dispatch and prints GitHub's verdict: `✓ Rebuild dispatched (GitHub 204)` or `✗ Rebuild failed: GitHub 401: Bad credentials`.
+- The **Rebuild pipeline** card on `/admin/dashboard` shows the last outcome and has a *rebuild now* button.
+- `GET /admin/stats` returns a `rebuild` field; `npx ziscus mod-log --action rebuild_failed` lists failures.
 
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add site/_site/
-          git diff --cached --quiet && echo "No changes" && exit 0
-          git commit -m "rebuild: bake comments for ${{ github.event.client_payload.slug }}"
-          git push
-```
-
-The Worker debounces rebuild triggers (30s window) to avoid flooding on bulk approvals.
+The Worker debounces rebuild triggers (30s window) to avoid flooding on bulk approvals; a failed dispatch releases the window so the next approval retries immediately.
 
 ## Development
 
@@ -253,6 +230,8 @@ curl -s -H "Authorization: Bearer $ZISCUS_ADMIN_SECRET" https://your-worker.work
 1. Revoke the old token at [github.com/settings/tokens](https://github.com/settings/tokens)
 2. Create a new fine-grained PAT (Repository access → your site repo, Permissions → Contents: Read and write)
 3. `npx wrangler secret put GITHUB_TOKEN` and paste the new token
+
+> **Fine-grained PATs expire** (GitHub caps them at one year; the default is much shorter). When the token dies the Worker keeps accepting comments but GitHub rejects every rebuild dispatch. You'll see it as a red **Rebuild pipeline** card on the dashboard, `GitHub 401` from `npx ziscus rebuild`, and `rebuild_failed` entries in the mod log — and the workflow's daily schedule still publishes within a day. Put the expiry date on a calendar.
 
 ## License
 
