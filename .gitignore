@@ -6,3 +6,4 @@ dist/
 *.log
 .gstack/
 .DS_Store
+embed/README.md
