@@ -9,6 +9,20 @@ export function escHtml(s: string): string {
     .replace(/\0/g, "");
 }
 
+/**
+ * Inverse of {@link escHtml} for the five entities it produces.
+ * `&amp;` is decoded LAST so already-escaped input such as `&amp;lt;` decodes
+ * to `&lt;` (the literal text the author typed), never to `<`.
+ */
+export function unescapeHtml(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
 /** A comment on a page */
 export interface Comment {
   id: string;

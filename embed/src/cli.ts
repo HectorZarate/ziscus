@@ -11,6 +11,7 @@ import { runExport } from "./cli/export.js";
 import { runModLog } from "./cli/mod-log.js";
 import { runMigrate } from "./cli/migrate.js";
 import { runListComments } from "./cli/comments.js";
+import { runRebuild } from "./cli/rebuild.js";
 import { loadEnvFile } from "./cli/load-env.js";
 import {
   checkWranglerVersion,
@@ -28,7 +29,7 @@ loadEnvFile(resolve(process.cwd(), ".env"));
 const program = new Command()
   .name("ziscus")
   .description("Zero-JavaScript anonymous comment system")
-  .version("0.4.0"); // Keep in sync with package.json version
+  .version("0.7.0"); // Keep in sync with package.json version
 
 program
   .command("init")
@@ -476,6 +477,41 @@ program
     });
     if (!res.ok) { console.error(`Failed (${res.status})`); process.exit(1); }
     console.log(`✓ Comments reopened on "${slug}".`);
+  });
+
+program
+  .command("rebuild [slug]")
+  .description("Trigger a site rebuild (GitHub repository_dispatch) and report whether GitHub accepted it")
+  .option("--endpoint <url>", "Worker endpoint")
+  .action(async (slug: string | undefined, opts: { endpoint?: string }) => {
+    const secret = process.env.ZISCUS_ADMIN_SECRET;
+    if (!secret) { console.error("Error: Set ZISCUS_ADMIN_SECRET in .env or environment."); process.exit(1); }
+    let endpoint = opts.endpoint;
+    if (!endpoint) {
+      try { endpoint = JSON.parse(await readFile("ziscus.config.json", "utf-8")).endpoint; }
+      catch { console.error("Error: No --endpoint and no ziscus.config.json."); process.exit(1); }
+    }
+    if (!endpoint) { console.error("Error: ziscus.config.json has no \"endpoint\"."); process.exit(1); }
+
+    const result = await runRebuild({ endpoint, secret, slug });
+
+    if (result.ok) {
+      console.log(`✓ Rebuild dispatched for "${result.slug ?? slug ?? "all"}" (GitHub ${result.status})`);
+      console.log(`  The rebuild workflow should appear in your repo's Actions tab within ~30s.`);
+      return;
+    }
+
+    if (result.httpStatus === 503) {
+      console.error(`✗ Rebuild not configured: ${result.error}`);
+      console.error(`  Set GITHUB_REPO in wrangler.toml and: cd worker && wrangler secret put GITHUB_TOKEN`);
+      process.exit(1);
+    }
+
+    console.error(`✗ Rebuild failed: ${result.error}`);
+    if (result.status === 401 || result.status === 403 || result.status === 404) {
+      console.error(`  GitHub rejected the token. Rotate it: cd worker && wrangler secret put GITHUB_TOKEN`);
+    }
+    process.exit(1);
   });
 
 program
