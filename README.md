@@ -4,9 +4,9 @@ Comments for static sites. No JavaScript. No accounts. Just an HTML form.
 
 A Cloudflare Worker stores comments in [D1](https://developers.cloudflare.com/d1/), your SSG bakes them into HTML at build time. Moderation via CLI and admin dashboard.
 
-**Live demo:** [ziscus.com](https://ziscus.com)
+**Live demo:** [ziscus.com](https://ziscus.com) — its site lives in a separate private repo that consumes `ziscus` and `rsslobster` from npm, exactly the way you would.
 
-![ziscus landing page](site/_site/images/screenshot-landing.png)
+![ziscus landing page](docs/images/screenshot-landing.png)
 
 Inspired by [giscus](https://github.com/giscus/giscus), but different:
 
@@ -35,38 +35,78 @@ Inspired by [giscus](https://github.com/giscus/giscus), but different:
 - **Works with any static site generator**
   - Hugo, Astro, Eleventy, Jekyll, Next.js and more
 
-Two packages:
+One npm package, `ziscus`, ships everything:
 
-- **`worker/`** — Cloudflare Worker (comment storage, moderation, submission)
-- **`embed/`** — TypeScript library for rendering comments as static HTML (`ziscus` on npm)
+- **`ziscus/worker`** — the Cloudflare Worker (storage, moderation, submission, admin) — built from `worker/`
+- **`ziscus`** — TypeScript renderers + `fetchComments()` for your SSG — built from `embed/`
+- **`npx ziscus`** — CLI: deploy, init, moderate, rebuild, export
 
 ## Quick start
 
 ### CLI (fastest way)
 
+In your site repo:
+
 ```bash
-npx ziscus deploy              # deploy Worker, create D1, set secrets — one command
-npx ziscus init                # scaffold SSG templates (Hugo, Astro, Eleventy, Jekyll, Next.js)
-npx ziscus ai-mod enable       # optional: turn on AI spam filtering
-npx ziscus dashboard           # print the Bearer header + open admin dashboard
+pnpm add -D ziscus wrangler
+npx wrangler login
+npx ziscus deploy --site-url https://myblog.com --ssg hugo
 ```
 
-That's it. `deploy` handles Worker deployment, D1 setup, secret generation, and SSG scaffolding. Read on if you want to understand each piece or set things up manually.
+`deploy` creates the D1 database, writes `wrangler.toml` and a one-line `worker.ts`, applies the schema, generates and saves the admin secret, deploys the Worker, and scaffolds your SSG template. Then:
+
+```bash
+npx ziscus ai-mod enable       # optional: Workers AI spam filtering
+npx ziscus dashboard           # print the Bearer header + open the admin dashboard
+```
+
+Read on if you want to understand each piece or set things up by hand.
 
 ### 1. Deploy the Worker
 
+The whole Worker is one line — `worker.ts`:
+
+```ts
+export { default } from "ziscus/worker";
+```
+
+`wrangler.toml`:
+
+```toml
+name = "ziscus-comments"
+main = "worker.ts"
+compatibility_date = "2025-09-27"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ziscus-comments"
+database_id = "<from `wrangler d1 create`>"
+
+[vars]
+ALLOWED_ORIGINS = "myblog.com"        # comma-separated hosts allowed to POST /submit
+MODERATION = "off"                    # "on" holds new comments for review
+RATE_LIMIT = "30"                     # comments per IP per hour
+GITHUB_REPO = "you/your-site-repo"    # receives repository_dispatch rebuild triggers
+
+# Optional — serve your static site from the same Worker (this is how ziscus.com
+# runs). Enables the instant "see your own comment" preview.
+# [assets]
+# directory = "_site"
+# binding = "ASSETS"
+# run_worker_first = true
+
+# Optional — AI spam filtering
+# [ai]
+# binding = "AI_MOD"
+```
+
 ```bash
-cd worker
-pnpm install
+wrangler d1 create ziscus-comments                # paste the id into wrangler.toml
+wrangler d1 execute ziscus-comments --remote --file=node_modules/ziscus/dist/schema.sql
 
-wrangler d1 create ziscus-comments
-# Update wrangler.toml with your database_id and ALLOWED_ORIGINS
-wrangler d1 execute ziscus-comments --remote --file=src/schema.sql
-
-# Generate and set admin secret (save it somewhere safe — you can't retrieve it later)
-NEW_SECRET=$(openssl rand -hex 32)
-echo "$NEW_SECRET" | wrangler secret put ADMIN_SECRET
-echo "ZISCUS_ADMIN_SECRET=$NEW_SECRET" > ../.env
+SECRET=$(openssl rand -hex 32)                    # save it — Cloudflare secrets are write-only
+echo "ZISCUS_ADMIN_SECRET=$SECRET" >> .env
+echo "$SECRET" | wrangler secret put ADMIN_SECRET
 
 wrangler deploy
 ```
@@ -94,6 +134,8 @@ const html = renderCommentsSection(comments, "my-post", "https://your-worker.wor
 const css = ziscusStyles();
 ```
 
+`fetchComments()` returns plain text (the API stores it HTML-escaped); the renderers escape exactly once.
+
 ### 3. Moderate
 
 ```bash
@@ -102,9 +144,10 @@ npx ziscus comments --status pending  # view pending queue
 npx ziscus comments --status spam     # view caught spam
 npx ziscus mod-log                    # moderation audit trail
 npx ziscus rebuild                    # force a site rebuild + prove the GitHub token works
+npx ziscus export --redact-ip         # backup (redact ip_hash if it lands anywhere public)
 ```
 
-![ziscus admin dashboard](site/_site/images/screenshot-dashboard.png)
+![ziscus admin dashboard](docs/images/screenshot-dashboard.png)
 
 > **Dashboard auth is header-only.** The admin secret is never placed in a URL
 > (query-string secrets leak into browser history, proxy/CDN logs, `Referer`
@@ -122,6 +165,24 @@ Three global modes (`POST /admin/mode`):
 | `paused` | Queued as pending | Hidden |
 | `off` | Rejected (403) | Hidden |
 
+### 4. Auto-rebuild on new comments
+
+The commenter sees their comment instantly (when the Worker serves your site, via a flash-cookie preview). Everyone else sees it after your site rebuilds: on every approved comment the Worker fires a GitHub `repository_dispatch` (`event_type: rebuild-comments`, payload `{ slug }`) at `GITHUB_REPO`, debounced 30s. Your site repo's workflow does the rest — bake, then deploy to wherever you host. `npx ziscus init` scaffolds one for your SSG; ziscus.com's own is: regenerate with rsslobster → upload a redacted backup artifact → `wrangler deploy`. Nothing is committed back.
+
+```bash
+# Fine-grained PAT → https://github.com/settings/personal-access-tokens/new
+#   Repository access: your site repo · Permissions: Contents → Read and write
+wrangler secret put GITHUB_TOKEN
+```
+
+**Is the pipeline healthy?** Every dispatch attempt is recorded, so a dead token can't fail silently:
+
+- `npx ziscus rebuild` — forces a dispatch and prints GitHub's verdict: `✓ Rebuild dispatched (GitHub 204)` or `✗ Rebuild failed: GitHub 401: Bad credentials`.
+- The **Rebuild pipeline** card on `/admin/dashboard` shows the last outcome and has a *rebuild now* button.
+- `GET /admin/stats` returns a `rebuild` field; `npx ziscus mod-log --action rebuild_failed` lists failures.
+
+A failed dispatch releases the debounce window so the next approval retries immediately. Add a daily `schedule:` to your workflow as a safety net — an expired token then delays publishing by at most a day.
+
 ## Theming
 
 Override CSS custom properties to match your site:
@@ -137,52 +198,16 @@ Override CSS custom properties to match your site:
 
 Falls back to `--color-text`, `--color-bg`, etc. if your site already uses them.
 
-### 4. Auto-rebuild on new comments
-
-When a comment is posted, the commenter sees it instantly. To make it visible to everyone else, the static site needs to rebuild. ziscus triggers this automatically via GitHub Actions.
-
-**Set up the Worker secrets:**
-
-```bash
-cd worker
-
-# Set your repo (owner/repo format)
-# Already in wrangler.toml as GITHUB_REPO — update it to match your repo
-
-# Create a fine-grained GitHub token:
-# → https://github.com/settings/personal-access-tokens/new
-# → Repository access: select your site repo
-# → Permissions: Contents → Read and write
-wrangler secret put GITHUB_TOKEN
-```
-
-**Add the workflow** (already included at `.github/workflows/rebuild-comments.yml`). On every `rebuild-comments` dispatch it regenerates the site, commits `site/_site/`, exports a backup, and **redeploys the Worker** so the freshly baked pages actually reach visitors. It also runs on a daily schedule and has a manual *Run workflow* button.
-
-**Secrets the workflow needs** (repo → Settings → Secrets and variables → Actions):
-
-| Secret | Purpose |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Deploys the Worker after each bake. Create at dash.cloudflare.com → My Profile → API Tokens → *Edit Cloudflare Workers* template, and add **D1 → Edit** and **Workers AI → Read** (both bindings are validated at deploy time). |
-| `CLOUDFLARE_ACCOUNT_ID` | Shown on the Workers & Pages overview page. |
-| `ZISCUS_ADMIN_SECRET` | Lets the workflow export a backup to `backups/` on every run. |
-
-> **Why the deploy step exists.** ziscus.com serves its pages from the Worker's static assets (`[assets]` in `wrangler.toml`). A bake that only lands in git is invisible until the Worker is redeployed — comments can sit "published" in the repo for weeks while the live site shows the old bake. If your site is hosted elsewhere (Cloudflare Pages, Netlify, GitHub Pages), your host's deploy-on-push replaces this step.
-
-**Is the pipeline healthy?** Every dispatch attempt is recorded, so a dead token can't fail silently:
-
-- `npx ziscus rebuild` — forces a dispatch and prints GitHub's verdict: `✓ Rebuild dispatched (GitHub 204)` or `✗ Rebuild failed: GitHub 401: Bad credentials`.
-- The **Rebuild pipeline** card on `/admin/dashboard` shows the last outcome and has a *rebuild now* button.
-- `GET /admin/stats` returns a `rebuild` field; `npx ziscus mod-log --action rebuild_failed` lists failures.
-
-The Worker debounces rebuild triggers (30s window) to avoid flooding on bulk approvals; a failed dispatch releases the window so the next approval retries immediately.
-
 ## Development
 
 ```bash
 pnpm install
-pnpm test
+pnpm test          # worker (Workers pool) + embed
 pnpm typecheck
+cd embed && pnpm build && npm pack --dry-run   # what ships: dist/{index,cli,worker}.js, worker.d.ts, schema.sql
 ```
+
+`worker/wrangler.toml` is this repo's dev/test config only (it serves a fixture site from `worker/test/site`). Nothing here deploys ziscus.com.
 
 ## Key management
 
@@ -229,7 +254,7 @@ curl -s -H "Authorization: Bearer $ZISCUS_ADMIN_SECRET" https://your-worker.work
 
 1. Revoke the old token at [github.com/settings/tokens](https://github.com/settings/tokens)
 2. Create a new fine-grained PAT (Repository access → your site repo, Permissions → Contents: Read and write)
-3. `npx wrangler secret put GITHUB_TOKEN` and paste the new token
+3. `wrangler secret put GITHUB_TOKEN` and paste the new token
 
 > **Fine-grained PATs expire** (GitHub caps them at one year; the default is much shorter). When the token dies the Worker keeps accepting comments but GitHub rejects every rebuild dispatch. You'll see it as a red **Rebuild pipeline** card on the dashboard, `GitHub 401` from `npx ziscus rebuild`, and `rebuild_failed` entries in the mod log — and the workflow's daily schedule still publishes within a day. Put the expiry date on a calendar.
 

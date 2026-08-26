@@ -16,6 +16,11 @@
 ### Security
 - **Backups no longer publish commenter IPs**: `ziscus export --redact-ip` strips every `ip_hash` (an unsalted 64-bit prefix of SHA-256 over the raw IP — reversible in seconds over IPv4) from comments, bans, and mod-log reasons, and the rebuild workflow uses it. The workflow's export step had never actually run before 2026-08-26 (its secret was never set); the one unredacted `backups/` commit it produced was removed.
 
+### Packaging
+- **The Worker ships in the npm package**: `export { default } from "ziscus/worker"` is a complete Worker, and `ziscus/schema.sql` (`node_modules/ziscus/dist/schema.sql`) is the D1 schema. Nobody needs to clone this repo any more. Types resolve via an optional `@cloudflare/workers-types` peer.
+- **`npx ziscus deploy` works in a fresh site repo**: without a `worker/` directory it writes `wrangler.toml` (with the freshly created `database_id`, `ALLOWED_ORIGINS` from `--site-url`, `GITHUB_REPO` from the git remote) and a one-line `worker.ts`, applies the schema shipped in the package, and sets the secret in the right directory. Previously it deployed whatever `worker/wrangler.toml` said — i.e. the maintainer's own database id.
+- **ziscus.com moved out**: the landing site and its rebuild workflow now live in a private repo that consumes `ziscus` and `rsslobster` from npm. `worker/wrangler.toml` here is dev/test config with a fixture site.
+
 ### Housekeeping
 - `site/lobster.json` (contains a long-rotated admin secret) is untracked and gitignored — rsslobster treats it as a private file.
 - Escaping helpers consolidated in `worker/src/html.ts`; CLI `--version` now matches `package.json`.
