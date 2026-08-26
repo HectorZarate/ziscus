@@ -1,10 +1,32 @@
 name: Rebuild comments
+
 on:
+  # Fired by the Worker (debounce.ts) whenever an approved comment changes.
   repository_dispatch:
     types: [rebuild-comments]
+  # Safety net. The Worker's GITHUB_TOKEN is a fine-grained PAT and *expires*;
+  # when it did (Jul 2026) dispatches failed silently and nothing was published
+  # for eight weeks. A daily run bounds that blast radius to one day.
+  schedule:
+    - cron: "17 6 * * *"
+  # Manual "Run workflow" button in the Actions tab.
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Slug being rebuilt (label for the commit message only)"
+        default: "all"
+        required: false
 
 permissions:
   contents: write
+
+# Dispatches can land seconds apart; serialize runs so two pushes never race.
+concurrency:
+  group: rebuild-comments
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
 jobs:
   rebuild:
@@ -15,6 +37,9 @@ jobs:
         with: { version: 10 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+
+      # Installs the pinned wrangler for the deploy step below.
+      - run: pnpm install --frozen-lockfile
 
       - name: Install rsslobster
         run: |
@@ -34,11 +59,40 @@ jobs:
           ZISCUS_ADMIN_SECRET: ${{ secrets.ZISCUS_ADMIN_SECRET }}
 
       - name: Commit and push
+        id: commit
+        env:
+          SLUG: ${{ github.event.client_payload.slug || github.event.inputs.slug || 'all' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add site/_site/
           git add backups/ 2>/dev/null || true
-          git diff --cached --quiet && echo "No changes" && exit 0
-          git commit -m "rebuild: bake comments for ${{ github.event.client_payload.slug }}"
+          if git diff --cached --quiet; then
+            echo "No changes"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "rebuild: bake comments for ${SLUG}"
           git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # ziscus.com is served from the Worker's static assets (wrangler.toml
+      # [assets]), so a bake that only lands in git is invisible to visitors
+      # until the Worker is redeployed. Deploying here closes that gap.
+      - name: Check deploy credentials
+        if: steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN secret is not set — the baked site was committed but NOT published to ziscus.com. Add the secret (see README → Auto-rebuild) and re-run this workflow."
+            exit 1
+          fi
+
+      - name: Deploy Worker (publishes the baked site)
+        if: steps.commit.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          packageManager: pnpm
+          command: deploy
