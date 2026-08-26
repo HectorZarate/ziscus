@@ -2,7 +2,9 @@
 # write their own wrangler.toml against the published `ziscus/worker` bundle
 # (see README → "1. Deploy the Worker"). ziscus.com's real config lives in
 # its own private site repo.
-name = "ziscus"
+# Deliberately NOT "ziscus" — that name is the production Worker, deployed only
+# from the private site repo. A stray `wrangler deploy` here must not touch it.
+name = "ziscus-dev"
 main = "src/index.ts"
 compatibility_date = "2025-09-27"
 
