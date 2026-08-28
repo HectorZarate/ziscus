@@ -2,6 +2,7 @@
   "private": true,
   "scripts": {
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "prepare": "git config core.hooksPath .githooks || true"
   }
 }

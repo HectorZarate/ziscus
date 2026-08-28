@@ -1,0 +1,34 @@
+#!/bin/sh
+# Pre-push: the ONLY gate (no CI exists: owner decision 2026-08-28, no GitHub
+# Actions on any project). Mirrors the stages the old ci.yml ran, one named
+# stage at a time, and prints what to do when a stage fails.
+# Enabled per clone by the root package.json "prepare" script
+# (git config core.hooksPath .githooks).
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+help() {
+  cat >&2 <<EOT
+
+✗ pre-push: stage "$1" failed. Push refused.
+
+  What to do:
+  1. Re-run it alone:  $2
+  2. Fix the cause at HEAD, commit, push again. The failing command's own output is above.
+  3. Passed on re-run with NO code change? That is a flake, not a pass: fix or quarantine the test. Never add retries.
+  4. Never \`git push --no-verify\` past a real failure: this hook is the only gate before the remote.
+EOT
+  exit 1
+}
+# stage <name> <command>: run one gate; on failure hand over to help.
+stage() {
+  echo "→ $1"
+  sh -c "$2" || help "$1" "$2"
+}
+
+stage "embed typecheck"     "cd embed && pnpm typecheck"
+stage "embed test"          "cd embed && pnpm test"
+stage "worker typecheck"    "cd worker && pnpm typecheck"
+stage "worker test"         "cd worker && pnpm test"
+stage "embed build + pack"  "cd embed && pnpm build && npm pack --dry-run"
+echo "✓ pre-push OK"
